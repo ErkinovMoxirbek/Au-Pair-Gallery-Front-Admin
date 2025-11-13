@@ -1,24 +1,37 @@
-import logo from './logo.svg';
-import './App.css';
+import { Routes, Route } from 'react-router-dom';
+import Login from './components/auth/Login';
+import DashboardLayout from './components/layout/DashboardLayout';
+import ProtectedRoute from './components/PrivateRoute';
+
+// Pages
+import Overview from './pages/dashboard/Overview';
+import Users from './pages/dashboard/Users';
+import Families from './pages/dashboard/Families';
+import Applications from './pages/dashboard/Applications';
+import Messages from './pages/dashboard/Messages';
+import Calendar from './pages/dashboard/Calendar';
+import Settings from './pages/dashboard/Settings';
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Routes>
+      <Route path="/" element={<Login />} />
+      
+      <Route element={<ProtectedRoute />}>
+        <Route element={<DashboardLayout />}>
+          <Route path="/dashboard/overview" element={<Overview />} />
+          <Route path="/dashboard/users" element={<Users />} />
+          <Route path="/dashboard/families" element={<Families />} />
+          <Route path="/dashboard/applications" element={<Applications />} />
+          <Route path="/dashboard/candidates" element={<Messages />} />
+          <Route path="/dashboard/calendar" element={<Calendar />} />
+          <Route path="/dashboard/settings" element={<Settings />} />
+          <Route path="/dashboard" element={<Overview />} />
+        </Route>
+      </Route>
+
+      <Route path="*" element={<div className="p-8 text-center">404 - Sahifa topilmadi</div>} />
+    </Routes>
   );
 }
 
