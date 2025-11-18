@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import dashboardService from '../../services/dashboardService';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
-import Modal from '../../components/shared/Modal';
+import Modal from '../../components/shared/UserModal';
 
 export default function Applications() {
   const [applications, setApplications] = useState([]);

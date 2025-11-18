@@ -12,7 +12,9 @@ const api = {
   // Families
   getFamilies: () => axios.get(`${API_URL}/families`).then(res => res.data),
   getFamily: (id) => axios.get(`${API_URL}/families/${id}`).then(res => res.data),
-
+  createFamily: (data) => axios.post(`${API_URL}/families`, data).then(res => res.data),
+  updateFamily: (id, data) => axios.put(`${API_URL}/families/${id}`, data).then(res => res.data),
+  deleteFamily: (id) => axios.delete(`${API_URL}/families/${id}`).then(res => res.data),
   // Stats
   getStats: () => axios.get(`${API_URL}/stats`).then(res => res.data),
 

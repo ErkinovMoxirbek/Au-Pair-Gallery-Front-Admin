@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { Search, Plus, Edit, Trash2, Download, UserPlus } from 'lucide-react';
 import dashboardService from '../../services/dashboardService';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
-import Modal from '../../components/shared/Modal';
+import Modal from '../../components/shared/UserModal';
 
 // Rollen-Bezeichnungen
 const roleLabels = {
