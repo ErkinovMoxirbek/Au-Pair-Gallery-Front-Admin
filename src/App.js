@@ -8,7 +8,7 @@ import Overview from './pages/dashboard/Overview';
 import Users from './pages/dashboard/Users';
 import Families from './pages/dashboard/Families';
 import Applications from './pages/dashboard/Applications';
-import Messages from './pages/dashboard/Messages';
+import Candidates from './pages/dashboard/Candidates';
 import Calendar from './pages/dashboard/Calendar';
 import Settings from './pages/dashboard/Settings';
 
@@ -22,8 +22,8 @@ function App() {
           <Route path="/dashboard/overview" element={<Overview />} />
           <Route path="/dashboard/users" element={<Users />} />
           <Route path="/dashboard/families" element={<Families />} />
+          <Route path="/dashboard/candidates" element={<Candidates />} />
           <Route path="/dashboard/applications" element={<Applications />} />
-          <Route path="/dashboard/candidates" element={<Messages />} />
           <Route path="/dashboard/calendar" element={<Calendar />} />
           <Route path="/dashboard/settings" element={<Settings />} />
           <Route path="/dashboard" element={<Overview />} />
