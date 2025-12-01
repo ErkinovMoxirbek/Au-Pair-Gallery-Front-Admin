@@ -1,14 +1,12 @@
-// src/pages/dashboard/Families.js - CLEAN VIEW WITH DETAIL MODAL (German UI)
-import { useState, useEffect } from 'react';
+// src/pages/dashboard/Families.js - CLEAN VIEW WITH SLIDE-OVER DETAIL (German UI - Pro Variant)
+import { useState, useEffect } from "react";
 import {
   Search,
   Plus,
-  Download,
   Users,
   MapPin,
   Phone,
   Mail,
-  Home as HomeIcon,
   X,
   Edit,
   Trash2,
@@ -17,22 +15,143 @@ import {
   Clock,
   Car,
   Utensils,
-  Calendar,
-  MessageSquare,
-  Globe,
-  Briefcase
-} from 'lucide-react';
-import dashboardService from '../../services/dashboardService';
-import LoadingSpinner from '../../components/shared/LoadingSpinner';
-import FamilyModal from '../../components/shared/FamilyModal';
+  Briefcase,
+  Baby,
+  List,
+  Grid,
+  RefreshCcw,
+} from "lucide-react";
 
+import dashboardService from "../../services/dashboardService";
+import LoadingSpinner from "../../components/shared/LoadingSpinner";
+import FamilyModal from "../../components/shared/FamilyModal";
+
+// --- Helper: qiymatlarni chiroyli formatlash (No -> Ma'lumot yo'q) ---
+function formatValue(value, fallback = "Maʼlumot yoʻq") {
+  if (value === null || value === undefined) return fallback;
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return fallback;
+
+    const lower = trimmed.toLowerCase();
+    if (["no", "none", "n/a", "-"].includes(lower)) return fallback;
+
+    return trimmed;
+  }
+
+  return value; // sonlar va boshqa tiplar uchun
+}
+
+// --- Oila rasmi uchun avatar ---
+function FamilyAvatar({ name, size = "md" }) {
+  const initial = name ? name.charAt(0).toUpperCase() : "F";
+  const sizeClasses =
+    size === "lg" ? "w-14 h-14 text-2xl" : "w-10 h-10 text-lg";
+
+  return (
+    <div
+      className={`rounded-full flex items-center justify-center text-white font-semibold bg-indigo-500/90 ${sizeClasses}`}
+    >
+      {initial}
+    </div>
+  );
+}
+
+// --- Oila card komponenti ---
+function FamilyCard({ family, onSelect, onEdit, onDelete }) {
+  const statusColor =
+    family.status === "ACTIVE"
+      ? "bg-green-100 text-green-700"
+      : "bg-red-100 text-red-700";
+
+  return (
+    <div
+      className="bg-white rounded-2xl shadow-lg border border-gray-100 p-5 cursor-pointer hover:shadow-xl hover:border-indigo-200 transition-all duration-200 flex flex-col justify-between h-full"
+      onClick={() => onSelect(family)}
+    >
+      {/* Header */}
+      <div className="flex items-start justify-between mb-4 gap-3">
+        {/* LEFT: avatar + name + status */}
+        <div className="flex items-start gap-3 flex-1 min-w-0">
+          <FamilyAvatar name={family.familyName} />
+          <div className="flex flex-col min-w-0">
+            <h3 className="text-[16px] font-semibold text-gray-900 leading-snug break-words">
+              {family.familyName}
+            </h3>
+            <span
+              className={`mt-1 inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full w-fit ${statusColor}`}
+            >
+              {family.status === "ACTIVE" ? "Aktiv" : "Nofaol"}
+            </span>
+          </div>
+        </div>
+
+        {/* RIGHT: location */}
+        <div className="flex items-center gap-1 text-xs text-gray-500 flex-shrink-0">
+          <MapPin className="w-3.5 h-3.5 text-gray-400" />
+          <span className="truncate max-w-[80px] text-right">
+            {family.city}
+          </span>
+        </div>
+      </div>
+
+      {/* Body Info */}
+      <div className="space-y-1 text-sm text-gray-600 border-t border-b border-gray-100 py-4 mb-4">
+        <p className="flex items-center gap-2">
+          <Users className="w-4 h-4 text-indigo-400" />
+          <span>Oila a'zolari:</span>
+          <span className="font-semibold">{family.members ?? "—"}</span>
+        </p>
+        <p className="flex items-center gap-2">
+          <Baby className="w-4 h-4 text-indigo-400" />
+          <span>Bolalar soni:</span>
+          <span className="font-semibold">{family.childrenCount ?? 0}</span>
+        </p>
+        <p className="flex items-center gap-2 truncate">
+          <Clock className="w-4 h-4 text-indigo-400" />
+          <span>Ish soati:</span>
+          <span className="font-semibold">
+            {family.workingHoursPerWeek || "Nomaʼlum"} soat
+          </span>
+        </p>
+      </div>
+
+      {/* Footer Actions */}
+      <div className="flex justify-end gap-2 pt-2">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(family);
+          }}
+          className="p-2 text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition"
+          title="Tahrirlash"
+        >
+          <Edit className="w-5 h-5" />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(family.id);
+          }}
+          className="p-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition"
+          title="O'chirish"
+        >
+          <Trash2 className="w-5 h-5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// --- Main component ---
 export default function Families() {
   const [families, setFamilies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingFamily, setEditingFamily] = useState(null);
-  const [viewMode, setViewMode] = useState('grid');
+  const [viewMode, setViewMode] = useState("grid"); // grid / list
   const [selectedFamily, setSelectedFamily] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
@@ -40,60 +159,85 @@ export default function Families() {
     loadFamilies();
   }, []);
 
+  // API dan oilalarni yuklash
   const loadFamilies = async () => {
     setLoading(true);
     try {
       const res = await dashboardService.getFamilies();
+      console.log("Families API response:", res);
+
       let list = [];
-      if (res?.data?.content) list = res.data.content;
-      else if (res?.data) list = res.data;
-      else if (res) list = res;
-      setFamilies(Array.isArray(list) ? list : []);
+      const payload = res?.data;
+
+      if (Array.isArray(payload)) {
+        list = payload;
+      } else if (Array.isArray(payload?.data)) {
+        list = payload.data;
+      } else if (Array.isArray(payload?.data?.content)) {
+        list = payload.data.content;
+      } else if (Array.isArray(payload?.content)) {
+        list = payload.content;
+      } else {
+        list = [];
+      }
+
+      setFamilies(list);
     } catch (error) {
-      console.error('Error:', error);
+      console.error("Oilalarni yuklashda xatolik:", error);
       setFamilies([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSave = async (familyData) => {
-    try {
-      if (editingFamily) {
-        await dashboardService.updateFamily(editingFamily.id, familyData);
-      } else {
-        await dashboardService.createFamily(familyData);
-      }
-      await loadFamilies();
-      closeModal();
-    } catch (error) {
-      console.error('Save error:', error);
-      throw error;
-    }
+  const handleSearch = (e) => {
+    setSearchTerm(e.target.value);
+    setSelectedFamily(null);
+    setShowDetailModal(false);
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Möchten Sie wirklich löschen?')) {
-      try {
-        await dashboardService.deleteFamily(id);
-        setShowDetailModal(false);
-        await loadFamilies();
-      } catch (error) {
-        console.error('Delete error:', error);
-        alert('Fehler: ' + error.message);
-      }
-    }
-  };
+  const safeFamilies = Array.isArray(families) ? families : [];
+
+  const filteredFamilies = safeFamilies.filter(
+    (family) =>
+      family.familyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      family.city?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const openModal = (family = null) => {
     setEditingFamily(family);
     setShowModal(true);
-    setShowDetailModal(false);
+    closeDetailModal();
   };
 
-  const closeModal = () => {
-    setShowModal(false);
-    setEditingFamily(null);
+  // 🔥 MUHIM: YANGI / ESKI OILA SAQLASH
+  const handleSaveFamily = async (data) => {
+    try {
+      if (data.id) {
+        // EDIT mode
+        await dashboardService.updateFamily(data.id, data);
+      } else {
+        // CREATE mode
+        await dashboardService.createFamily(data);
+      }
+      await loadFamilies();
+    } catch (err) {
+      console.error("Family saqlashda xatolik:", err);
+      alert("Family saqlashda xatolik yuz berdi");
+    }
+  };
+
+  // 🔥 MUHIM: O‘CHIRISH
+  const handleDelete = async (id) => {
+    if (!window.confirm("Rostdan ham bu oilani o'chirmoqchimisiz?")) return;
+    try {
+      await dashboardService.deleteFamily(id);
+      closeDetailModal();
+      await loadFamilies();
+    } catch (err) {
+      console.error("Family o'chirishda xatolik:", err);
+      alert("Family o'chirishda xatolik yuz berdi");
+    }
   };
 
   const openDetailModal = (family) => {
@@ -102,572 +246,380 @@ export default function Families() {
   };
 
   const closeDetailModal = () => {
-    setShowDetailModal(false);
     setSelectedFamily(null);
+    setShowDetailModal(false);
   };
 
-  const exportToCSV = () => {
-    const headers = ['ID', 'Familie', 'Vater', 'Mutter', 'Adresse', 'Telefon', 'E-Mail', 'Kinder'];
-    const rows = filteredFamilies.map((f) => [
-      f.id,
-      f.familyName || '',
-      f.fatherName || '',
-      f.motherName || '',
-      `${f.address || ''} ${f.city || ''} ${f.country || ''}`.trim(),
-      f.phone || '',
-      f.email || '',
-      f.childrenCount || 0
-    ]);
-
-    const csv = [headers.join(','), ...rows.map((r) => r.map((c) => `"${c}"`).join(','))].join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `families_${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const filteredFamilies = families.filter((f) => {
-    if (!searchTerm) return true;
-    const search = searchTerm.toLowerCase();
-    return (
-      (f.familyName || '').toLowerCase().includes(search) ||
-      (f.fatherName || '').toLowerCase().includes(search) ||
-      (f.motherName || '').toLowerCase().includes(search) ||
-      (f.email || '').toLowerCase().includes(search) ||
-      (f.phone || '').toLowerCase().includes(search) ||
-      (f.city || '').toLowerCase().includes(search)
-    );
-  });
-
-  if (loading) return <LoadingSpinner />;
+  const isDetailOpen = showDetailModal && selectedFamily;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Familien</h1>
-            <p className="text-gray-600 mt-1">{filteredFamilies.length} Familien</p>
-          </div>
-          <div className="flex gap-3">
+    <div className="p-6 md:p-10 min-h-screen bg-gray-50 relative">
+      <div className="max-w-7xl mx-auto">
+        {/* Header and Controls */}
+        <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Oila Ro'yxati ({safeFamilies.length})
+          </h1>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative">
+              <Search className="w-5 h-5 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Oila yoki shahar bo'yicha qidirish..."
+                value={searchTerm}
+                onChange={handleSearch}
+                className="w-full sm:w-64 pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl bg-white shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition"
+              />
+            </div>
+
             <button
-              onClick={exportToCSV}
-              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 shadow-sm transition"
+              onClick={loadFamilies}
+              className="px-4 py-2.5 text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-100 transition shadow-sm flex items-center justify-center gap-2"
+              title="Yangilash"
             >
-              <Download className="w-4 h-4" />
-              <span>Exportieren</span>
+              <RefreshCcw className="w-5 h-5" />
             </button>
             <button
               onClick={() => openModal()}
-              className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-lg transition"
+              className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold shadow-lg shadow-indigo-200 transition flex items-center justify-center gap-2"
             >
               <Plus className="w-5 h-5" />
-              <span>Neue Familie</span>
+              Yangi oila
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Search & View Toggle */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Suchen..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-10 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            )}
-          </div>
-
-          <div className="flex gap-2 bg-gray-100 rounded-xl p-1">
+        {/* View Mode and Status */}
+        <div className="flex items-center justify-between mb-6">
+          <span className="text-sm text-gray-600">
+            {filteredFamilies.length} ta oila topildi.
+          </span>
+          <div className="flex gap-2 p-1 bg-white border border-gray-200 rounded-xl shadow-sm">
             <button
-              onClick={() => setViewMode('grid')}
-              className={`px-4 py-2 rounded-lg transition ${
-                viewMode === 'grid' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600'
+              onClick={() => setViewMode("grid")}
+              className={`p-2 rounded-lg transition ${
+                viewMode === "grid"
+                  ? "bg-indigo-50 text-indigo-600 shadow-sm"
+                  : "text-gray-500 hover:bg-gray-50"
               }`}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-                />
-              </svg>
+              <Grid className="w-5 h-5" />
             </button>
             <button
-              onClick={() => setViewMode('table')}
-              className={`px-4 py-2 rounded-lg transition ${
-                viewMode === 'table' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-600'
+              onClick={() => setViewMode("list")}
+              className={`p-2 rounded-lg transition ${
+                viewMode === "list"
+                  ? "bg-indigo-50 text-indigo-600 shadow-sm"
+                  : "text-gray-500 hover:bg-gray-50"
               }`}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-              </svg>
+              <List className="w-5 h-5" />
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Content */}
-      {filteredFamilies.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-200 p-16 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
-            <HomeIcon className="w-8 h-8 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Keine Familien gefunden</h3>
-          <p className="text-gray-500">
-            {searchTerm ? 'Suchbegriff anpassen' : 'Fügen Sie eine neue Familie hinzu'}
-          </p>
-        </div>
-      ) : viewMode === 'grid' ? (
-        // GRID VIEW - SIMPLE CLEAN CARDS
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-          {filteredFamilies.map((family) => (
-            <div
-              key={family.id}
-              onClick={() => openDetailModal(family)}
-              className="bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-lg hover:border-blue-400 transition-all cursor-pointer group"
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center text-white font-bold text-lg group-hover:scale-110 transition">
-                  {family.familyName?.charAt(0)?.toUpperCase() || 'F'}
-                </div>
-                <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-semibold rounded-full">
-                  ID: {family.id}
-                </span>
-              </div>
-
-              <h3 className="text-lg font-bold text-gray-900 mb-3 truncate">
-                {family.familyName || 'Unbekannte Familie'}
-              </h3>
-
-              <div className="space-y-2.5">
-                {(family.city || family.country) && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                    <span className="truncate">
-                      {[family.city, family.country].filter(Boolean).join(', ')}
-                    </span>
-                  </div>
-                )}
-
-                {family.phone && (
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                    <span>{family.phone}</span>
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-blue-500" />
-                    <span className="text-sm font-semibold text-gray-900">
-                      {family.childrenCount || 0} Kinder
-                    </span>
-                  </div>
-                  {family.pocketMoney && (
-                    <div className="flex items-center gap-1 text-sm font-semibold text-green-600">
-                      <DollarSign className="w-4 h-4" />
-                      {family.pocketMoney}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <p className="text-xs text-center text-gray-500 group-hover:text-blue-600 transition">
-                  Zum Anzeigen klicken →
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        // TABLE VIEW - SIMPLE
-        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Familie</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Ort</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Kontakt</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase">Kinder</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {filteredFamilies.map((family) => (
-                  <tr
-                    key={family.id}
-                    onClick={() => openDetailModal(family)}
-                    className="hover:bg-blue-50 transition cursor-pointer"
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center text-white font-bold flex-shrink-0">
-                          {family.familyName?.charAt(0)?.toUpperCase() || 'F'}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-900">
-                            {family.familyName || 'Unbekannt'}
-                          </p>
-                          <p className="text-xs text-gray-500">ID: {family.id}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2 text-sm text-gray-700">
-                        <MapPin className="w-4 h-4 text-gray-400" />
-                        <span>
-                          {[family.city, family.country].filter(Boolean).join(', ') || '—'}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="space-y-1">
-                        {family.phone && (
-                          <p className="text-sm text-gray-700 flex items-center gap-2">
-                            <Phone className="w-3 h-3 text-gray-400" />
-                            {family.phone}
-                          </p>
-                        )}
-                        {family.email && (
-                          <p className="text-sm text-gray-600 truncate max-w-xs">
-                            {family.email}
-                          </p>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-4">
-                        <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 text-sm font-semibold rounded-lg">
-                          <Users className="w-4 h-4" />
-                          {family.childrenCount || 0}
-                        </span>
-                        {family.pocketMoney && (
-                          <span className="text-sm font-semibold text-green-600">
-                            €{family.pocketMoney}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="border-t border-gray-100 px-6 py-4 bg-gray-50">
-            <p className="text-sm text-gray-600 font-medium">
-              Insgesamt {filteredFamilies.length} Familien
+        {/* Family List */}
+        {loading ? (
+          <LoadingSpinner />
+        ) : filteredFamilies.length === 0 ? (
+          <div className="text-center p-20 bg-white rounded-3xl border border-dashed border-gray-300">
+            <Users className="w-12 h-12 mx-auto text-gray-400 mb-4" />
+            <p className="text-xl font-semibold text-gray-700">
+              Hech qanday oila topilmadi
+            </p>
+            <p className="text-gray-500">
+              Qidiruv shartlarini tekshiring yoki yangi oila qo'shing.
             </p>
           </div>
-        </div>
-      )}
-
-      {/* DETAIL MODAL - FULL INFORMATION */}
-      {showDetailModal && selectedFamily && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
-            <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-3xl">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl font-bold">
-                    {selectedFamily.familyName?.charAt(0)?.toUpperCase() || 'F'}
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold">
-                      {selectedFamily.familyName || 'Unbekannte Familie'}
-                    </h2>
-                    <p className="text-blue-100">ID: {selectedFamily.id}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={closeDetailModal}
-                  className="p-2 hover:bg-white/20 rounded-xl transition"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6 space-y-6">
-              {/* Parents Section */}
-              {(selectedFamily.fatherName || selectedFamily.motherName) && (
-                <div className="bg-gray-50 rounded-2xl p-5">
-                  <h3 className="text-sm font-bold text-gray-700 uppercase mb-4 flex items-center gap-2">
-                    <User className="w-4 h-4" />
-                    Eltern
-                  </h3>
-                  <div className="space-y-3">
-                    {selectedFamily.fatherName && (
-                      <div className="flex items-center gap-3 bg-white p-3 rounded-xl">
-                        <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                          <span className="text-xl">👨</span>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500">Vater</p>
-                          <p className="font-semibold text-gray-900">
-                            {selectedFamily.fatherName}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                    {selectedFamily.motherName && (
-                      <div className="flex items-center gap-3 bg-white p-3 rounded-xl">
-                        <div className="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center">
-                          <span className="text-xl">👩</span>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500">Mutter</p>
-                          <p className="font-semibold text-gray-900">
-                            {selectedFamily.motherName}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Contact Section */}
-              <div className="bg-gray-50 rounded-2xl p-5">
-                <h3 className="text-sm font-bold text-gray-700 uppercase mb-4 flex items-center gap-2">
-                  <Phone className="w-4 h-4" />
-                  Kontaktdaten
-                </h3>
-                <div className="space-y-3">
-                  {selectedFamily.phone && (
-                    <div className="flex items-center gap-3 bg-white p-3 rounded-xl">
-                      <Phone className="w-5 h-5 text-green-500" />
-                      <div className="flex-1">
-                        <p className="text-xs text-gray-500">Telefon</p>
-                        <a
-                          href={`tel:${selectedFamily.phone}`}
-                          className="font-semibold text-gray-900 hover:text-blue-600"
-                        >
-                          {selectedFamily.phone}
-                        </a>
-                      </div>
-                    </div>
-                  )}
-                  {selectedFamily.email && (
-                    <div className="flex items-center gap-3 bg-white p-3 rounded-xl">
-                      <Mail className="w-5 h-5 text-orange-500" />
-                      <div className="flex-1">
-                        <p className="text-xs text-gray-500">E-Mail</p>
-                        <a
-                          href={`mailto:${selectedFamily.email}`}
-                          className="font-semibold text-gray-900 hover:text-blue-600 break-all"
-                        >
-                          {selectedFamily.email}
-                        </a>
-                      </div>
-                    </div>
-                  )}
-                  {(selectedFamily.address ||
-                    selectedFamily.city ||
-                    selectedFamily.country) && (
-                    <div className="flex items-start gap-3 bg-white p-3 rounded-xl">
-                      <MapPin className="w-5 h-5 text-red-500 mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-xs text-gray-500 mb-1">Adresse</p>
-                        <p className="font-semibold text-gray-900">
-                          {[
-                            selectedFamily.address,
-                            selectedFamily.city,
-                            selectedFamily.country
-                          ]
-                            .filter(Boolean)
-                            .join(', ')}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Children & Work Details */}
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="bg-blue-50 rounded-2xl p-5">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Users className="w-5 h-5 text-blue-600" />
-                    <h4 className="font-bold text-gray-900">Kinder</h4>
-                  </div>
-                  <p className="text-3xl font-bold text-blue-600">
-                    {selectedFamily.childrenCount || 0}
-                  </p>
-                  {selectedFamily.childrenAges && (
-                    <p className="text-sm text-gray-600 mt-2">
-                      Alter: {selectedFamily.childrenAges}
-                    </p>
-                  )}
-                </div>
-
-                {selectedFamily.pocketMoney && (
-                  <div className="bg-green-50 rounded-2xl p-5">
-                    <div className="flex items-center gap-3 mb-2">
-                      <DollarSign className="w-5 h-5 text-green-600" />
-                      <h4 className="font-bold text-gray-900">Taschengeld</h4>
-                    </div>
-                    <p className="text-3xl font-bold text-green-600">
-                      €{selectedFamily.pocketMoney}
-                    </p>
-                    <p className="text-sm text-gray-600 mt-2">pro Monat</p>
-                  </div>
-                )}
-
-                {selectedFamily.workingHoursPerWeek && (
-                  <div className="bg-purple-50 rounded-2xl p-5">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Clock className="w-5 h-5 text-purple-600" />
-                      <h4 className="font-bold text-gray-900">Arbeitszeit</h4>
-                    </div>
-                    <p className="text-3xl font-bold text-purple-600">
-                      {selectedFamily.workingHoursPerWeek}
-                    </p>
-                    <p className="text-sm text-gray-600 mt-2">Stunden / Woche</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Additional Info */}
-              {(selectedFamily.duties ||
-                selectedFamily.familyDescription ||
-                selectedFamily.preferences ||
-                selectedFamily.roomDescription) && (
-                <div className="bg-gray-50 rounded-2xl p-5 space-y-4">
-                  <h3 className="text-sm font-bold text-gray-700 uppercase flex items-center gap-2">
-                    <MessageSquare className="w-4 h-4" />
-                    Zusätzliche Informationen
-                  </h3>
-
-                  {selectedFamily.duties && (
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">Aufgaben</p>
-                      <p className="text-gray-900 bg-white p-3 rounded-xl">
-                        {selectedFamily.duties}
-                      </p>
-                    </div>
-                  )}
-
-                  {selectedFamily.familyDescription && (
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">Über die Familie</p>
-                      <p className="text-gray-900 bg-white p-3 rounded-xl">
-                        {selectedFamily.familyDescription}
-                      </p>
-                    </div>
-                  )}
-
-                  {selectedFamily.roomDescription && (
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">Zimmerbeschreibung</p>
-                      <p className="text-gray-900 bg-white p-3 rounded-xl">
-                        {selectedFamily.roomDescription}
-                      </p>
-                    </div>
-                  )}
-
-                  {selectedFamily.preferences && (
-                    <div>
-                      <p className="text-xs text-gray-500 mb-1">Präferenzen</p>
-                      <p className="text-gray-900 bg-white p-3 rounded-xl">
-                        {selectedFamily.preferences}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Features */}
-              <div className="flex flex-wrap gap-2">
-                {selectedFamily.needsDrivingLicense && (
-                  <span className="inline-flex items-center gap-2 px-4 py-2 bg-orange-50 text-orange-700 font-semibold rounded-xl">
-                    <Car className="w-4 h-4" />
-                    Führerschein erforderlich
-                  </span>
-                )}
-                {selectedFamily.mealsProvided && (
-                  <span className="inline-flex items-center gap-2 px-4 py-2 bg-red-50 text-red-700 font-semibold rounded-xl">
-                    <Utensils className="w-4 h-4" />
-                    Verpflegung inklusive
-                  </span>
-                )}
-                {selectedFamily.languagesSpoken && (
-                  <span className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 font-semibold rounded-xl">
-                    <Globe className="w-4 h-4" />
-                    {selectedFamily.languagesSpoken}
-                  </span>
-                )}
-              </div>
-
-              {/* Date */}
-              {selectedFamily.createdAt && (
-                <div className="text-center pt-4 border-t border-gray-200">
-                  <p className="text-xs text-gray-500">
-                    Erstellt am:{' '}
-                    {new Date(selectedFamily.createdAt).toLocaleDateString('de-DE', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="sticky bottom-0 bg-gray-50 p-6 rounded-b-3xl border-t border-gray-200 flex gap-3">
-              <button
-                onClick={() => openModal(selectedFamily)}
-                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold shadow-lg transition"
-              >
-                <Edit className="w-5 h-5" />
-                Bearbeiten
-              </button>
-              <button
-                onClick={() => handleDelete(selectedFamily.id)}
-                className="px-6 py-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 font-semibold transition"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
-              <button
-                onClick={closeDetailModal}
-                className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300 font-semibold transition"
-              >
-                Schließen
-              </button>
-            </div>
+        ) : (
+          <div
+            className={`grid gap-6 ${
+              viewMode === "grid"
+                ? "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                : "grid-cols-1"
+            }`}
+          >
+            {filteredFamilies.map((family) => (
+              <FamilyCard
+                key={family.id}
+                family={family}
+                onSelect={openDetailModal}
+                onEdit={openModal}
+                onDelete={handleDelete}
+              />
+            ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Edit Modal */}
+      {/* Edit/Create Modal */}
       {showModal && (
         <FamilyModal
           show={showModal}
-          onClose={closeModal}
+          onClose={() => setShowModal(false)}
           item={editingFamily}
-          onSave={handleSave}
+          onSave={handleSaveFamily}
         />
+      )}
+
+      {/* Detail Panel (Slide-over Drawer) */}
+      <FamilyDetailDrawer
+        show={isDetailOpen}
+        onClose={closeDetailModal}
+        family={selectedFamily}
+        onEdit={openModal}
+        onDelete={handleDelete}
+      />
+    </div>
+  );
+}
+
+// --- Family Detail Drawer Component ---
+function FamilyDetailDrawer({ show, onClose, family, onEdit, onDelete }) {
+  if (!show || !family) return null;
+
+  const handleDeleteClick = (e) => {
+    e.stopPropagation();
+    onDelete(family.id);
+    onClose();
+  };
+
+  const statusColor =
+    family.status === "ACTIVE" ? "bg-green-500" : "bg-red-500";
+  const statusText = family.status === "ACTIVE" ? "Faol" : "Nofaol";
+
+  return (
+    <div
+      className={`fixed inset-0 z-50 overflow-hidden transition-opacity duration-300 ${
+        show ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+      }`}
+    >
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-gray-900/40" onClick={onClose} />
+
+      {/* Panel */}
+      <div
+        className={`fixed inset-y-0 right-0 max-w-full flex transition-transform duration-300 transform ${
+          show ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div className="w-screen max-w-lg">
+          <div className="h-full flex flex-col bg-white shadow-2xl rounded-l-3xl overflow-y-auto">
+            {/* Header */}
+            <div className="p-6 md:p-8 bg-gray-50 border-b border-gray-200 flex items-center justify-between sticky top-0 z-10">
+              <div className="flex items-center gap-4">
+                <FamilyAvatar name={family.familyName} size="lg" />
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 leading-tight">
+                    {family.familyName} Oila
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    {formatValue(family.city, "-")},{" "}
+                    {formatValue(family.country, "-")}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="p-2 rounded-full hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Status & Contact Info */}
+            <div className="px-8 py-4 bg-white border-b border-gray-100 flex items-center justify-between flex-shrink-0 sticky top-[77px] z-10 shadow-sm">
+              <div className="flex items-center gap-2">
+                <span className={`w-3 h-3 rounded-full ${statusColor}`} />
+                <span className="text-sm font-semibold text-gray-700">
+                  {statusText}
+                </span>
+              </div>
+              <div className="flex gap-4">
+                <a
+                  href={`tel:${family.phone}`}
+                  className="text-indigo-600 hover:text-indigo-700 transition"
+                  title="Qo'ng'iroq"
+                >
+                  <Phone className="w-5 h-5" />
+                </a>
+                <a
+                  href={`mailto:${family.email}`}
+                  className="text-indigo-600 hover:text-indigo-700 transition"
+                  title="Email yuborish"
+                >
+                  <Mail className="w-5 h-5" />
+                </a>
+              </div>
+            </div>
+
+            {/* Detail Content */}
+            <div className="flex-1 p-6 md:p-8 space-y-8 overflow-y-auto">
+              {/* General */}
+              <DetailSection icon={User} title="Asosiy Ma'lumotlar">
+                <DetailItem
+                  label="Ota/Ona ismi"
+                  value={`${formatValue(family.fatherName, "-")} / ${formatValue(
+                    family.motherName,
+                    "-"
+                  )}`}
+                />
+                <DetailItem
+                  label="A'zolar soni"
+                  value={`${family.members ?? "—"} kishi`}
+                />
+                <DetailItem
+                  label="So'zlashadigan tillar"
+                  value={formatValue(family.languagesSpoken)}
+                />
+                <DetailItem
+                  label="Ro'yxatga olingan sana"
+                  value={
+                    family.createdAt
+                      ? new Date(family.createdAt).toLocaleDateString("de-DE")
+                      : "-"
+                  }
+                />
+              </DetailSection>
+
+              {/* Address */}
+              <DetailSection icon={MapPin} title="Manzil">
+                <DetailItem
+                  label="Davlat/Shahar"
+                  value={`${formatValue(family.country, "-")}, ${formatValue(
+                    family.city,
+                    "-"
+                  )}`}
+                />
+                <DetailItem
+                  label="To'liq manzil"
+                  value={formatValue(family.address)}
+                  type="long"
+                />
+              </DetailSection>
+
+              {/* Children */}
+              <DetailSection icon={Baby} title="Bolalar Haqida">
+                <DetailItem
+                  label="Bolalar soni"
+                  value={`${family.childrenCount ?? 0} ta`}
+                />
+                <DetailItem
+                  label="Yoshlari"
+                  value={formatValue(family.childrenAges)}
+                  type="long"
+                />
+                <DetailItem
+                  label="Tavsif"
+                  value={formatValue(family.childrenDescription)}
+                  type="long"
+                />
+              </DetailSection>
+
+              {/* Au Pair Requirements */}
+              <DetailSection icon={Briefcase} title="Talablar & Shartlar">
+                <DetailItem
+                  icon={Clock}
+                  label="Haftalik ish soati"
+                  value={`${family.workingHoursPerWeek || "-"} soat`}
+                />
+                <DetailItem
+                  icon={DollarSign}
+                  label="Cho'ntak puli"
+                  value={
+                    family.pocketMoney !== null &&
+                    family.pocketMoney !== undefined
+                      ? `${family.pocketMoney} €`
+                      : "-"
+                  }
+                />
+                <DetailItem
+                  icon={Car}
+                  label="Haydovchilik shart"
+                  value={family.needsDrivingLicense ? "Ha" : "Yo'q"}
+                />
+                <DetailItem
+                  icon={Utensils}
+                  label="Ovqat bilan ta'minlash"
+                  value={family.mealsProvided ? "Ha" : "Yo'q"}
+                />
+                <DetailItem
+                  label="Vazifalar"
+                  value={formatValue(family.duties)}
+                  type="long"
+                />
+                <DetailItem
+                  label="Xona sharoitlari"
+                  value={formatValue(family.roomDescription)}
+                  type="long"
+                />
+                <DetailItem
+                  label="Afzalliklar"
+                  value={formatValue(family.preferences)}
+                  type="long"
+                />
+              </DetailSection>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="sticky bottom-0 bg-gray-50 p-6 border-t border-gray-200 flex gap-3 flex-shrink-0">
+              <button
+                onClick={() => onEdit(family)}
+                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold shadow-lg shadow-indigo-200 transition"
+              >
+                <Edit className="w-5 h-5" />
+                Tahrirlash
+              </button>
+              <button
+                onClick={handleDeleteClick}
+                className="px-6 py-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 font-semibold transition flex items-center gap-2"
+              >
+                <Trash2 className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Detail Helper Components ---
+function DetailSection({ icon: Icon, title, children }) {
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-bold text-gray-900 border-b border-gray-100 pb-2 flex items-center gap-3">
+        <Icon className="w-5 h-5 text-indigo-500" />
+        {title}
+      </h3>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
+function DetailItem({ icon: Icon, label, value, type = "short" }) {
+  const displayValue =
+    type === "short" ? formatValue(value, "-") : formatValue(value, "Maʼlumot yoʻq");
+
+  return (
+    <div
+      className={`flex ${
+        type === "short" ? "justify-between items-start" : "flex-col gap-1"
+      }`}
+    >
+      <div className="flex items-center gap-2 text-sm text-gray-500">
+        {Icon && <Icon className="w-4 h-4 text-indigo-400" />}
+        <span className="font-medium">{label}:</span>
+      </div>
+
+      {type === "short" ? (
+        <span className="text-sm font-semibold text-gray-700 max-w-[60%] text-right">
+          {displayValue}
+        </span>
+      ) : (
+        <p className="text-sm text-gray-700 bg-gray-50 px-3 py-2 rounded-lg w-full mt-1">
+          {displayValue}
+        </p>
       )}
     </div>
   );

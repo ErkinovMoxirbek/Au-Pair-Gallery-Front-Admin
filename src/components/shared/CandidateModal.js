@@ -1,22 +1,43 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+// src/components/shared/CandidateModal.js - MODERN REDESIGN (MULTI FILE UPLOAD + VALIDATION)
+import { useEffect, useRef, useState } from "react";
 import {
-  X, Save, User, MapPin, Briefcase, Heart, Languages,
-  GraduationCap, Award, FileText, Image as ImageIcon,
-  Plus, Trash2, Car, Cigarette, PawPrint, Calendar, DollarSign
+  X,
+  Save,
+  User,
+  MapPin,
+  Briefcase,
+  Heart,
+  Languages,
+  GraduationCap,
+  Award,
+  FileText,
+  Image as ImageIcon,
+  Plus,
+  Trash2,
+  Car,
+  Cigarette,
+  PawPrint,
+  CheckCircle2,
+  Calendar,
 } from "lucide-react";
 
+// Navigatsiya bo'limlari
 const SECTIONS = [
-  { id: "personal", label: "Persönliche Daten", icon: User },
+  { id: "personal", label: "Persönliche", icon: User },
   { id: "contact", label: "Kontakt", icon: MapPin },
-  { id: "professional", label: "Profession & Verfügbarkeit", icon: Briefcase },
+  { id: "professional", label: "Profession", icon: Briefcase },
   { id: "experience", label: "Erfahrungen", icon: Briefcase },
   { id: "languages", label: "Sprachen", icon: Languages },
   { id: "education", label: "Ausbildung", icon: GraduationCap },
   { id: "hobbies", label: "Hobbys", icon: Heart },
   { id: "certs", label: "Zertifikate", icon: Award },
-  { id: "files", label: "Dateien (Foto & CV)", icon: FileText },
+  { id: "files", label: "Dateien", icon: FileText },
 ];
 
+// Language level enum (backend bilan mos)
+const LANGUAGE_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2", "NATIVE"];
+
+// Bo'sh obyektlar (Factories)
 const emptyExperience = () => ({
   positionTitle: "",
   companyName: "",
@@ -25,13 +46,20 @@ const emptyExperience = () => ({
   responsibilities: "",
 });
 const emptyLanguage = () => ({ language: "", level: "" });
-const emptyEducation = () => ({ schoolName: "", startDate: "", endDate: "", description: "" });
+const emptyEducation = () => ({
+  schoolName: "",
+  startDate: "",
+  endDate: "",
+  description: "",
+});
 const emptyHobby = () => ({ name: "" });
 const emptyCert = () => ({ title: "", issuer: "", date: "", filePath: "" });
 
 export default function CandidateModal({ show, onClose, item, onSave }) {
   const [saving, setSaving] = useState(false);
+  const [activeSection, setActiveSection] = useState("personal");
 
+  // Form Data State
   const [formData, setFormData] = useState({
     name: "",
     surname: "",
@@ -61,16 +89,21 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
     certificates: [],
   });
 
-  // files
+  // Files
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [cvFile, setCvFile] = useState(null);
 
-  // section refs for smooth scroll
+  // YANGI fayl state'lar
+  const [certificateFile, setCertificateFile] = useState(null);
+  const [diplomaFile, setDiplomaFile] = useState(null);
+  const [passportFile, setPassportFile] = useState(null);
+
+  // Refs for scroll handling
   const sectionRefs = useRef({});
   const containerRef = useRef(null);
-  const [activeSection, setActiveSection] = useState("personal");
 
+  // Initialize Data
   useEffect(() => {
     if (!item) return;
     setFormData((p) => ({
@@ -83,25 +116,56 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
       certificates: item.certificates || [],
     }));
     if (item.profileImagePath) setPhotoPreview(item.profileImagePath);
+
+    // mavjud fayl pathlar bo'lsa, yangi fayl tanlanmaguncha null bo'lib turadi
+    setCvFile(null);
+    setCertificateFile(null);
+    setDiplomaFile(null);
+    setPassportFile(null);
   }, [item]);
 
+  // Reset on Open (yangi candidate)
   useEffect(() => {
     if (!show) return;
-    // reset files each open if creating new
     if (!item) {
+      setFormData({
+        name: "",
+        surname: "",
+        birthday: "",
+        gender: "",
+        nationality: "",
+        phone: "",
+        email: "",
+        country: "",
+        city: "",
+        street: "",
+        zipCode: "",
+        professionTitle: "",
+        drivingLicense: false,
+        smoker: false,
+        petFriendly: false,
+        availableFrom: "",
+        availableUntil: "",
+        expectedPocketMoney: "",
+        desiredCountry: "",
+        aboutMe: "",
+        motivation: "",
+        experiences: [],
+        languages: [],
+        educations: [],
+        hobbies: [],
+        certificates: [],
+      });
       setPhotoFile(null);
       setPhotoPreview(null);
       setCvFile(null);
+      setCertificateFile(null);
+      setDiplomaFile(null);
+      setPassportFile(null);
     }
   }, [show, item]);
 
-  const scrollTo = (id) => {
-    const el = sectionRefs.current[id];
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
-  // observe active section during scroll
+  // Scroll Spy Logic
   useEffect(() => {
     if (!show) return;
     const root = containerRef.current;
@@ -109,14 +173,12 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
 
     const observer = new IntersectionObserver(
       (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        const visible = entries.find((e) => e.isIntersecting);
         if (visible?.target?.dataset?.section) {
           setActiveSection(visible.target.dataset.section);
         }
       },
-      { root, threshold: [0.2, 0.5, 0.8] }
+      { root, threshold: 0.3, rootMargin: "-100px 0px -50% 0px" }
     );
 
     SECTIONS.forEach((s) => {
@@ -127,18 +189,71 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
     return () => observer.disconnect();
   }, [show]);
 
-  const update = (field, value) =>
-    setFormData((p) => ({ ...p, [field]: value }));
+  const scrollTo = (id) => {
+    setActiveSection(id);
+    const el = sectionRefs.current[id];
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
 
+  // === FAYL VALIDATSIYA HELPERI ===
+  const validateFile = (file, options) => {
+    const { allowedMimePrefixes = [], allowedExtensions = [], fieldLabel, maxSizeMB } = options;
+
+    if (!file) return false;
+
+    const mime = file.type || "";
+    const name = file.name?.toLowerCase() || "";
+
+    // 1) Hajmni tekshirish (ixtiyoriy)
+    if (maxSizeMB && file.size > maxSizeMB * 1024 * 1024) {
+      alert(
+        `${fieldLabel} uchun fayl hajmi ${maxSizeMB} MB dan oshmasligi kerak. Tanlagan fayl: ${(
+          file.size /
+          (1024 * 1024)
+        ).toFixed(2)} MB`
+      );
+      return false;
+    }
+
+    // 2) MIME turi bo‘yicha
+    const mimeOk =
+      allowedMimePrefixes.length === 0 ||
+      allowedMimePrefixes.some((p) => mime.startsWith(p));
+
+    // 3) Kengaytma bo‘yicha
+    const extOk =
+      allowedExtensions.length === 0 ||
+      allowedExtensions.some((ext) => name.endsWith(ext));
+
+    if (!mimeOk || !extOk) {
+      alert(
+        `${fieldLabel} uchun ushbu fayl turi ruxsat etilmagan.\nRuxsat etilgan formatlar: ${[
+          ...allowedExtensions,
+        ]
+          .map((e) => e.replace(".", "").toUpperCase())
+          .join(", ")}`
+      );
+      return false;
+    }
+
+    return true;
+  };
+
+  // State Helpers
+  const update = (field, value) =>
+    setFormData((p) => ({
+      ...p,
+      [field]: value,
+    }));
   const add = (listName, factory) =>
     setFormData((p) => ({ ...p, [listName]: [...p[listName], factory()] }));
-
   const remove = (listName, idx) =>
     setFormData((p) => ({
       ...p,
       [listName]: p[listName].filter((_, i) => i !== idx),
     }));
-
   const updateList = (listName, idx, field, value) =>
     setFormData((p) => {
       const next = [...p[listName]];
@@ -146,37 +261,99 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
       return { ...p, [listName]: next };
     });
 
+  // Handlers + Fayl validatsiyasi
+
   const handlePhotoChange = (file) => {
     if (!file) return;
+
+    const ok = validateFile(file, {
+      fieldLabel: "Profilfoto",
+      maxSizeMB: 5,
+      allowedMimePrefixes: ["image/"],
+      allowedExtensions: [".jpg", ".jpeg", ".png", ".webp"],
+    });
+
+    if (!ok) return;
+
     setPhotoFile(file);
     setPhotoPreview(URL.createObjectURL(file));
   };
 
   const handleCvChange = (file) => {
     if (!file) return;
+
+    const ok = validateFile(file, {
+      fieldLabel: "Lebenslauf (CV)",
+      maxSizeMB: 10,
+      allowedMimePrefixes: ["application/pdf"],
+      allowedExtensions: [".pdf"],
+    });
+
+    if (!ok) return;
+
     setCvFile(file);
   };
 
-  const validate = () => {
-    const errs = [];
-    if (!formData.name?.trim()) errs.push("Vorname ist erforderlich");
-    if (!formData.surname?.trim()) errs.push("Nachname ist erforderlich");
-    if (!formData.phone?.trim()) errs.push("Telefon ist erforderlich");
-    if (!formData.email?.trim()) errs.push("E-Mail ist erforderlich");
-    if (formData.email && !/\S+@\S+\.\S+/.test(formData.email))
-      errs.push("E-Mail Format ist ungültig");
-    return errs;
+  const handleCertificateChange = (file) => {
+    if (!file) return;
+
+    const ok = validateFile(file, {
+      fieldLabel: "Zertifikat",
+      maxSizeMB: 10,
+      allowedMimePrefixes: ["application/pdf", "image/"],
+      allowedExtensions: [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
+    });
+
+    if (!ok) return;
+
+    setCertificateFile(file);
+  };
+
+  const handleDiplomaChange = (file) => {
+    if (!file) return;
+
+    const ok = validateFile(file, {
+      fieldLabel: "Diplom / Übersetzung",
+      maxSizeMB: 10,
+      allowedMimePrefixes: ["application/pdf", "image/"],
+      allowedExtensions: [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
+    });
+
+    if (!ok) return;
+
+    setDiplomaFile(file);
+  };
+
+  const handlePassportChange = (file) => {
+    if (!file) return;
+
+    const ok = validateFile(file, {
+      fieldLabel: "Reisepass",
+      maxSizeMB: 10,
+      allowedMimePrefixes: ["application/pdf", "image/"],
+      allowedExtensions: [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
+    });
+
+    if (!ok) return;
+
+    setPassportFile(file);
   };
 
   const handleSave = async () => {
-    const errs = validate();
-    if (errs.length) {
-      alert(errs.join("\n"));
+    if (!formData.name?.trim() || !formData.surname?.trim()) {
+      alert("Bitte Vor- und Nachnamen eingeben.");
       return;
     }
     try {
       setSaving(true);
-      await onSave(formData, photoFile, cvFile);
+      await onSave(
+        formData,
+        photoFile,
+        cvFile,
+        certificateFile,
+        diplomaFile,
+        passportFile
+      );
     } finally {
       setSaving(false);
     }
@@ -185,692 +362,790 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-6xl rounded-3xl shadow-2xl overflow-hidden">
-        {/* Top bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b bg-white/90">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold">
-              {item ? "E" : "N"}
-            </div>
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">
-                {item ? "Kandidat bearbeiten" : "Neuen Kandidaten erstellen"}
-              </h2>
-              <p className="text-sm text-gray-500">
-                Alle Informationen in einem Formular
-              </p>
-            </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm transition-opacity"
+        onClick={onClose}
+      />
+
+      {/* Modal Card */}
+      <div className="relative bg-white w-full max-w-5xl h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        {/* 1. Header */}
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white z-20">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">
+              {item ? `Kandidat bearbeiten: ${item.name}` : "Neuen Kandidaten erstellen"}
+            </h2>
+            <p className="text-sm text-gray-500">
+              Bitte füllen Sie alle erforderlichen Felder aus
+            </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl hover:bg-gray-100 transition"
-          >
-            <X className="w-6 h-6 text-gray-700" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="p-2 rounded-full hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
         </div>
 
-        {/* Body */}
-        <div className="flex">
-          {/* Left nav */}
-          <aside className="hidden md:block w-72 border-r bg-gray-50 p-4">
-            <nav className="space-y-1">
-              {SECTIONS.map((s) => {
-                const Icon = s.icon;
-                const active = activeSection === s.id;
-                return (
-                  <button
-                    key={s.id}
-                    onClick={() => scrollTo(s.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold transition
-                      ${active ? "bg-blue-600 text-white shadow" : "text-gray-700 hover:bg-white"}
-                    `}
-                  >
-                    <Icon className="w-4 h-4" />
-                    {s.label}
-                  </button>
-                );
-              })}
-            </nav>
-          </aside>
+        {/* 2. Horizontal Sticky Nav */}
+        <div className="border-b border-gray-100 bg-gray-50/50 overflow-x-auto no-scrollbar">
+          <div className="flex px-6 items-center gap-1 min-w-max p-2">
+            {SECTIONS.map((s) => {
+              const Icon = s.icon;
+              const isActive = activeSection === s.id;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => scrollTo(s.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 border
+                    ${
+                      isActive
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-200"
+                        : "bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                    }
+                  `}
+                >
+                  <Icon
+                    className={`w-4 h-4 ${
+                      isActive ? "text-indigo-100" : "text-gray-400"
+                    }`}
+                  />
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-          {/* Form scroll area */}
-          <main
-            ref={containerRef}
-            className="flex-1 max-h-[75vh] overflow-y-auto p-6 space-y-8"
-          >
+        {/* 3. Main Content (Scrollable) */}
+        <div
+          ref={containerRef}
+          className="flex-1 overflow-y-auto p-6 md:p-8 bg-white scroll-smooth"
+        >
+          <div className="max-w-4xl mx-auto space-y-12 pb-20">
             {/* PERSONAL */}
-            <Section id="personal" title="Persönliche Daten" icon={User} sectionRefs={sectionRefs}>
-              <div className="grid md:grid-cols-2 gap-4">
-                <Field label="Vorname *">
-                  <input
-                    className="input"
-                    value={formData.name}
-                    onChange={(e) => update("name", e.target.value)}
-                    placeholder="z.B. Ali"
-                  />
-                </Field>
-                <Field label="Nachname *">
-                  <input
-                    className="input"
-                    value={formData.surname}
-                    onChange={(e) => update("surname", e.target.value)}
-                    placeholder="z.B. Karimov"
-                  />
-                </Field>
-              </div>
+            <Section
+              id="personal"
+              title="Persönliche Daten"
+              icon={User}
+              sectionRefs={sectionRefs}
+            >
+              <div className="grid md:grid-cols-2 gap-5">
+                <Input
+                  label="Vorname *"
+                  value={formData.name}
+                  onChange={(v) => update("name", v)}
+                />
+                <Input
+                  label="Nachname *"
+                  value={formData.surname}
+                  onChange={(v) => update("surname", v)}
+                />
 
-              <div className="grid md:grid-cols-3 gap-4">
-                <Field label="Geburtsdatum">
-                  <input
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
                     type="date"
-                    className="input"
-                    value={formData.birthday || ""}
-                    onChange={(e) => update("birthday", e.target.value)}
+                    label="Geburtsdatum"
+                    value={formData.birthday}
+                    onChange={(v) => update("birthday", v)}
                   />
-                </Field>
-                <Field label="Geschlecht">
-                  <select
-                    className="input"
-                    value={formData.gender || ""}
-                    onChange={(e) => update("gender", e.target.value)}
+                  <Select
+                    label="Geschlecht"
+                    value={formData.gender}
+                    onChange={(v) => update("gender", v)}
                   >
                     <option value="">—</option>
                     <option value="MALE">Männlich</option>
                     <option value="FEMALE">Weiblich</option>
                     <option value="OTHER">Andere</option>
-                  </select>
-                </Field>
-                <Field label="Nationalität">
-                  <input
-                    className="input"
-                    value={formData.nationality || ""}
-                    onChange={(e) => update("nationality", e.target.value)}
-                    placeholder="z.B. Uzbek"
-                  />
-                </Field>
+                  </Select>
+                </div>
+                <Input
+                  label="Nationalität"
+                  value={formData.nationality}
+                  onChange={(v) => update("nationality", v)}
+                />
               </div>
             </Section>
 
             {/* CONTACT */}
-            <Section id="contact" title="Kontakt & Adresse" icon={MapPin} sectionRefs={sectionRefs}>
-              <div className="grid md:grid-cols-2 gap-4">
-                <Field label="Telefon *">
-                  <input
-                    className="input"
-                    value={formData.phone}
-                    onChange={(e) => update("phone", e.target.value)}
-                    placeholder="+998 90 123 45 67"
-                  />
-                </Field>
-                <Field label="E-Mail *">
-                  <input
-                    className="input"
-                    value={formData.email}
-                    onChange={(e) => update("email", e.target.value)}
-                    placeholder="email@mail.com"
-                  />
-                </Field>
+            <Section
+              id="contact"
+              title="Kontakt & Adresse"
+              icon={MapPin}
+              sectionRefs={sectionRefs}
+            >
+              <div className="grid md:grid-cols-2 gap-5">
+                <Input
+                  label="Telefon *"
+                  value={formData.phone}
+                  onChange={(v) => update("phone", v)}
+                  placeholder="+998..."
+                />
+                <Input
+                  label="E-Mail *"
+                  value={formData.email}
+                  onChange={(v) => update("email", v)}
+                  placeholder="name@example.com"
+                />
               </div>
-
-              <div className="grid md:grid-cols-2 gap-4">
-                <Field label="Land">
-                  <input
-                    className="input"
-                    value={formData.country || ""}
-                    onChange={(e) => update("country", e.target.value)}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                <div className="col-span-1 md:col-span-2">
+                  <Input
+                    label="Straße"
+                    value={formData.street}
+                    onChange={(v) => update("street", v)}
                   />
-                </Field>
-                <Field label="Stadt">
-                  <input
-                    className="input"
-                    value={formData.city || ""}
-                    onChange={(e) => update("city", e.target.value)}
-                  />
-                </Field>
+                </div>
+                <Input
+                  label="PLZ"
+                  value={formData.zipCode}
+                  onChange={(v) => update("zipCode", v)}
+                />
+                <Input
+                  label="Stadt"
+                  value={formData.city}
+                  onChange={(v) => update("city", v)}
+                />
               </div>
-
-              <div className="grid md:grid-cols-3 gap-4">
-                <Field label="Straße">
-                  <input
-                    className="input"
-                    value={formData.street || ""}
-                    onChange={(e) => update("street", e.target.value)}
-                  />
-                </Field>
-                <Field label="PLZ">
-                  <input
-                    className="input"
-                    value={formData.zipCode || ""}
-                    onChange={(e) => update("zipCode", e.target.value)}
-                  />
-                </Field>
+              <div className="mt-4">
+                <Input
+                  label="Land"
+                  value={formData.country}
+                  onChange={(v) => update("country", v)}
+                />
               </div>
             </Section>
 
             {/* PROFESSIONAL */}
-            <Section id="professional" title="Profession & Verfügbarkeit" icon={Briefcase} sectionRefs={sectionRefs}>
-              <div className="grid md:grid-cols-2 gap-4">
-                <Field label="Beruf / Titel">
-                  <input
-                    className="input"
-                    value={formData.professionTitle || ""}
-                    onChange={(e) => update("professionTitle", e.target.value)}
-                    placeholder="z.B. Au Pair / Babysitter"
-                  />
-                </Field>
-
-                <Field label="Wunschland">
-                  <input
-                    className="input"
-                    value={formData.desiredCountry || ""}
-                    onChange={(e) => update("desiredCountry", e.target.value)}
-                    placeholder="z.B. Deutschland"
-                  />
-                </Field>
+            <Section
+              id="professional"
+              title="Profession & Verfügbarkeit"
+              icon={Briefcase}
+              sectionRefs={sectionRefs}
+            >
+              <div className="grid md:grid-cols-2 gap-5 mb-5">
+                <Input
+                  label="Beruf / Titel"
+                  value={formData.professionTitle}
+                  onChange={(v) => update("professionTitle", v)}
+                  placeholder="z.B. Au Pair"
+                />
+                <Input
+                  label="Wunschland"
+                  value={formData.desiredCountry}
+                  onChange={(v) => update("desiredCountry", v)}
+                />
               </div>
 
-              <div className="grid md:grid-cols-3 gap-4">
-                <Field label="Verfügbar ab">
-                  <input
+              <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100 mb-5">
+                <h4 className="text-sm font-bold text-indigo-900 mb-3 flex items-center gap-2">
+                  <Calendar className="w-4 h-4" /> Zeitraum & Geld
+                </h4>
+                <div className="grid md:grid-cols-3 gap-4">
+                  <Input
                     type="date"
-                    className="input"
-                    value={formData.availableFrom || ""}
-                    onChange={(e) => update("availableFrom", e.target.value)}
+                    label="Verfügbar ab"
+                    value={formData.availableFrom}
+                    onChange={(v) => update("availableFrom", v)}
+                    bg="bg-white"
                   />
-                </Field>
-                <Field label="Verfügbar bis">
-                  <input
+                  <Input
                     type="date"
-                    className="input"
-                    value={formData.availableUntil || ""}
-                    onChange={(e) => update("availableUntil", e.target.value)}
+                    label="Verfügbar bis"
+                    value={formData.availableUntil}
+                    onChange={(v) => update("availableUntil", v)}
+                    bg="bg-white"
                   />
-                </Field>
-                <Field label="Taschengeld (€/Monat)">
-                  <input
+                  <Input
                     type="number"
-                    className="input"
-                    value={formData.expectedPocketMoney || ""}
-                    onChange={(e) => update("expectedPocketMoney", e.target.value)}
-                    placeholder="280"
+                    label="Taschengeld (€)"
+                    value={formData.expectedPocketMoney}
+                    onChange={(v) => update("expectedPocketMoney", v)}
+                    bg="bg-white"
                   />
-                </Field>
+                </div>
               </div>
 
-              <div className="flex flex-wrap gap-3">
-                <Toggle
+              <div className="flex flex-wrap gap-3 mb-5">
+                <FeatureToggle
                   icon={Car}
                   label="Führerschein"
-                  checked={!!formData.drivingLicense}
+                  checked={formData.drivingLicense}
                   onChange={(v) => update("drivingLicense", v)}
                 />
-                <Toggle
+                <FeatureToggle
                   icon={Cigarette}
                   label="Raucher"
-                  checked={!!formData.smoker}
+                  checked={formData.smoker}
                   onChange={(v) => update("smoker", v)}
                 />
-                <Toggle
+                <FeatureToggle
                   icon={PawPrint}
                   label="Tierfreundlich"
-                  checked={!!formData.petFriendly}
+                  checked={formData.petFriendly}
                   onChange={(v) => update("petFriendly", v)}
                 />
               </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <Field label="Über mich">
-                  <textarea
-                    rows={4}
-                    className="input"
-                    value={formData.aboutMe || ""}
-                    onChange={(e) => update("aboutMe", e.target.value)}
-                    placeholder="Kurzbeschreibung…"
-                  />
-                </Field>
-                <Field label="Motivation">
-                  <textarea
-                    rows={4}
-                    className="input"
-                    value={formData.motivation || ""}
-                    onChange={(e) => update("motivation", e.target.value)}
-                    placeholder="Warum möchten Sie Au Pair sein?"
-                  />
-                </Field>
+              <div className="grid md:grid-cols-2 gap-5">
+                <TextArea
+                  label="Über mich"
+                  value={formData.aboutMe}
+                  onChange={(v) => update("aboutMe", v)}
+                  rows={4}
+                />
+                <TextArea
+                  label="Motivation"
+                  value={formData.motivation}
+                  onChange={(v) => update("motivation", v)}
+                  rows={4}
+                />
               </div>
             </Section>
 
-            {/* EXPERIENCES */}
-            <Section id="experience" title="Erfahrungen" icon={Briefcase} sectionRefs={sectionRefs}
+            {/* EXPERIENCE */}
+            <Section
+              id="experience"
+              title="Erfahrungen"
+              icon={Briefcase}
+              sectionRefs={sectionRefs}
               action={<AddButton onClick={() => add("experiences", emptyExperience)} />}
             >
-              {formData.experiences?.length ? (
-                <div className="space-y-4">
-                  {formData.experiences.map((ex, i) => (
-                    <Card key={i}>
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <Field label="Position">
-                          <input
-                            className="input"
-                            value={ex.positionTitle || ""}
-                            onChange={(e) => updateList("experiences", i, "positionTitle", e.target.value)}
-                          />
-                        </Field>
-                        <Field label="Firma / Familie">
-                          <input
-                            className="input"
-                            value={ex.companyName || ""}
-                            onChange={(e) => updateList("experiences", i, "companyName", e.target.value)}
-                          />
-                        </Field>
-                      </div>
-
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <Field label="Start">
-                          <input
-                            type="date"
-                            className="input"
-                            value={ex.startDate || ""}
-                            onChange={(e) => updateList("experiences", i, "startDate", e.target.value)}
-                          />
-                        </Field>
-                        <Field label="Ende">
-                          <input
-                            type="date"
-                            className="input"
-                            value={ex.endDate || ""}
-                            onChange={(e) => updateList("experiences", i, "endDate", e.target.value)}
-                          />
-                        </Field>
-                      </div>
-
-                      <Field label="Aufgaben / Verantwortung">
-                        <textarea
-                          rows={3}
-                          className="input"
-                          value={ex.responsibilities || ""}
-                          onChange={(e) => updateList("experiences", i, "responsibilities", e.target.value)}
-                        />
-                      </Field>
-
-                      <RemoveButton onClick={() => remove("experiences", i)} />
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <EmptyHint text="Noch keine Erfahrungen hinzugefügt." />
+              {formData.experiences.length === 0 && (
+                <EmptyState text="Keine Erfahrungen hinzugefügt" />
               )}
+              <div className="space-y-4">
+                {formData.experiences.map((ex, i) => (
+                  <Card
+                    key={i}
+                    onRemove={() => remove("experiences", i)}
+                    title={`Position #${i + 1}`}
+                  >
+                    <div className="grid md:grid-cols-2 gap-4 mb-3">
+                      <Input
+                        label="Position"
+                        value={ex.positionTitle}
+                        onChange={(v) =>
+                          updateList("experiences", i, "positionTitle", v)
+                        }
+                      />
+                      <Input
+                        label="Firma"
+                        value={ex.companyName}
+                        onChange={(v) =>
+                          updateList("experiences", i, "companyName", v)
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 mb-3">
+                      <Input
+                        type="date"
+                        label="Start"
+                        value={ex.startDate}
+                        onChange={(v) =>
+                          updateList("experiences", i, "startDate", v)
+                        }
+                      />
+                      <Input
+                        type="date"
+                        label="Ende"
+                        value={ex.endDate}
+                        onChange={(v) =>
+                          updateList("experiences", i, "endDate", v)
+                        }
+                      />
+                    </div>
+                    <TextArea
+                      label="Aufgaben"
+                      value={ex.responsibilities}
+                      onChange={(v) =>
+                        updateList("experiences", i, "responsibilities", v)
+                      }
+                      rows={2}
+                      maxLength={255}
+                    />
+                  </Card>
+                ))}
+              </div>
             </Section>
 
-            {/* LANGUAGES */}
-            <Section id="languages" title="Sprachen" icon={Languages} sectionRefs={sectionRefs}
-              action={<AddButton onClick={() => add("languages", emptyLanguage)} />}
-            >
-              {formData.languages?.length ? (
+            {/* LANGUAGES & HOBBIES */}
+            <div className="grid md:grid-cols-2 gap-8">
+              <Section
+                id="languages"
+                title="Sprachen"
+                icon={Languages}
+                sectionRefs={sectionRefs}
+                action={<AddButton onClick={() => add("languages", emptyLanguage)} small />}
+              >
+                {formData.languages.length === 0 && (
+                  <EmptyState text="Keine Sprachen" />
+                )}
                 <div className="space-y-3">
                   {formData.languages.map((l, i) => (
-                    <Card key={i} compact>
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <Field label="Sprache">
-                          <input
-                            className="input"
-                            value={l.language || ""}
-                            onChange={(e) => updateList("languages", i, "language", e.target.value)}
-                            placeholder="Deutsch"
-                          />
-                        </Field>
-                        <Field label="Niveau">
-                          <input
-                            className="input"
-                            value={l.level || ""}
-                            onChange={(e) => updateList("languages", i, "level", e.target.value)}
-                            placeholder="A2 / B1 / C1"
-                          />
-                        </Field>
-                      </div>
-                      <RemoveButton onClick={() => remove("languages", i)} />
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <EmptyHint text="Keine Sprachen eingetragen." />
-              )}
-            </Section>
-
-            {/* EDUCATION */}
-            <Section id="education" title="Ausbildung" icon={GraduationCap} sectionRefs={sectionRefs}
-              action={<AddButton onClick={() => add("educations", emptyEducation)} />}
-            >
-              {formData.educations?.length ? (
-                <div className="space-y-4">
-                  {formData.educations.map((ed, i) => (
-                    <Card key={i}>
-                      <Field label="Schule / Institut">
-                        <input
-                          className="input"
-                          value={ed.schoolName || ""}
-                          onChange={(e) => updateList("educations", i, "schoolName", e.target.value)}
+                    <div key={i} className="flex gap-2 items-end">
+                      <div className="flex-1">
+                        <Input
+                          placeholder="Sprache (z.B. Deutsch)"
+                          value={l.language}
+                          onChange={(v) =>
+                            updateList("languages", i, "language", v)
+                          }
                         />
-                      </Field>
-
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <Field label="Start">
-                          <input
-                            type="date"
-                            className="input"
-                            value={ed.startDate || ""}
-                            onChange={(e) => updateList("educations", i, "startDate", e.target.value)}
-                          />
-                        </Field>
-                        <Field label="Ende">
-                          <input
-                            type="date"
-                            className="input"
-                            value={ed.endDate || ""}
-                            onChange={(e) => updateList("educations", i, "endDate", e.target.value)}
-                          />
-                        </Field>
                       </div>
-
-                      <Field label="Beschreibung">
-                        <textarea
-                          rows={3}
-                          className="input"
-                          value={ed.description || ""}
-                          onChange={(e) => updateList("educations", i, "description", e.target.value)}
-                        />
-                      </Field>
-
-                      <RemoveButton onClick={() => remove("educations", i)} />
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <EmptyHint text="Keine Ausbildung hinzugefügt." />
-              )}
-            </Section>
-
-            {/* HOBBIES */}
-            <Section id="hobbies" title="Hobbys" icon={Heart} sectionRefs={sectionRefs}
-              action={<AddButton onClick={() => add("hobbies", emptyHobby)} />}
-            >
-              {formData.hobbies?.length ? (
-                <div className="flex flex-wrap gap-3">
-                  {formData.hobbies.map((h, i) => (
-                    <div key={i} className="bg-white border rounded-xl px-3 py-2 flex items-center gap-2 shadow-sm">
-                      <input
-                        className="outline-none text-sm"
-                        placeholder="Hobby"
-                        value={h.name || ""}
-                        onChange={(e) => updateList("hobbies", i, "name", e.target.value)}
-                      />
-                      <button onClick={() => remove("hobbies", i)} className="text-gray-400 hover:text-red-600">
+                      <div className="w-32">
+                        <Select
+                          label=""
+                          value={l.level}
+                          onChange={(v) =>
+                            updateList("languages", i, "level", v)
+                          }
+                        >
+                          <option value="">Level wählen</option>
+                          {LANGUAGE_LEVELS.map((lvl) => (
+                            <option key={lvl} value={lvl}>
+                              {lvl}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+                      <button
+                        onClick={() => remove("languages", i)}
+                        className="p-3 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-xl mb-0.5"
+                      >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <EmptyHint text="Keine Hobbys." />
+              </Section>
+
+              <Section
+                id="hobbies"
+                title="Hobbys"
+                icon={Heart}
+                sectionRefs={sectionRefs}
+                action={<AddButton onClick={() => add("hobbies", emptyHobby)} small />}
+              >
+                <div className="flex flex-wrap gap-2">
+                  {formData.hobbies.map((h, i) => (
+                    <div
+                      key={i}
+                      className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-lg"
+                    >
+                      <input
+                        className="bg-transparent border-none outline-none text-sm text-indigo-900 placeholder-indigo-300 w-24"
+                        placeholder="Hobby..."
+                        value={h.name}
+                        onChange={(e) =>
+                          updateList("hobbies", i, "name", e.target.value)
+                        }
+                      />
+                      <button
+                        onClick={() => remove("hobbies", i)}
+                        className="text-indigo-400 hover:text-red-500"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                  {formData.hobbies.length === 0 && (
+                    <span className="text-sm text-gray-400 italic">
+                      Keine Hobbys
+                    </span>
+                  )}
+                </div>
+              </Section>
+            </div>
+
+            {/* EDUCATION */}
+            <Section
+              id="education"
+              title="Ausbildung"
+              icon={GraduationCap}
+              sectionRefs={sectionRefs}
+              action={<AddButton onClick={() => add("educations", emptyEducation)} />}
+            >
+              {formData.educations.length === 0 && (
+                <EmptyState text="Keine Ausbildung" />
               )}
+              <div className="space-y-4">
+                {formData.educations.map((ed, i) => (
+                  <Card key={i} onRemove={() => remove("educations", i)}>
+                    <Input
+                      label="Schule / Institut"
+                      value={ed.schoolName}
+                      onChange={(v) =>
+                        updateList("educations", i, "schoolName", v)
+                      }
+                      className="mb-3"
+                    />
+                    <div className="grid grid-cols-2 gap-4 mb-3">
+                      <Input
+                        type="date"
+                        label="Start"
+                        value={ed.startDate}
+                        onChange={(v) =>
+                          updateList("educations", i, "startDate", v)
+                        }
+                      />
+                      <Input
+                        type="date"
+                        label="Ende"
+                        value={ed.endDate}
+                        onChange={(v) =>
+                          updateList("educations", i, "endDate", v)
+                        }
+                      />
+                    </div>
+                    <TextArea
+                      label="Beschreibung"
+                      value={ed.description}
+                      onChange={(v) =>
+                        updateList("educations", i, "description", v)
+                      }
+                      rows={2}
+                      maxLength={255}
+                    />
+                  </Card>
+                ))}
+              </div>
             </Section>
 
-            {/* CERTIFICATES */}
-            <Section id="certs" title="Zertifikate" icon={Award} sectionRefs={sectionRefs}
+            {/* CERTIFICATES (meta ma'lumotlar, fayl alohida files bo'limida) */}
+            <Section
+              id="certs"
+              title="Zertifikate"
+              icon={Award}
+              sectionRefs={sectionRefs}
               action={<AddButton onClick={() => add("certificates", emptyCert)} />}
             >
-              {formData.certificates?.length ? (
-                <div className="space-y-4">
-                  {formData.certificates.map((c, i) => (
-                    <Card key={i}>
-                      <div className="grid md:grid-cols-2 gap-4">
-                        <Field label="Titel">
-                          <input
-                            className="input"
-                            value={c.title || ""}
-                            onChange={(e) => updateList("certificates", i, "title", e.target.value)}
-                          />
-                        </Field>
-                        <Field label="Aussteller">
-                          <input
-                            className="input"
-                            value={c.issuer || ""}
-                            onChange={(e) => updateList("certificates", i, "issuer", e.target.value)}
-                          />
-                        </Field>
-                      </div>
-
-                      <Field label="Datum">
-                        <input
-                          type="date"
-                          className="input"
-                          value={c.date || ""}
-                          onChange={(e) => updateList("certificates", i, "date", e.target.value)}
-                        />
-                      </Field>
-
-                      <RemoveButton onClick={() => remove("certificates", i)} />
-                    </Card>
-                  ))}
-                </div>
-              ) : (
-                <EmptyHint text="Keine Zertifikate." />
+              {formData.certificates.length === 0 && (
+                <EmptyState text="Keine Zertifikate" />
               )}
+              <div className="space-y-4">
+                {formData.certificates.map((c, i) => (
+                  <Card key={i} onRemove={() => remove("certificates", i)}>
+                    <div className="grid md:grid-cols-2 gap-4 mb-3">
+                      <Input
+                        label="Titel"
+                        value={c.title}
+                        onChange={(v) =>
+                          updateList("certificates", i, "title", v)
+                        }
+                      />
+                      <Input
+                        label="Aussteller"
+                        value={c.issuer}
+                        onChange={(v) =>
+                          updateList("certificates", i, "issuer", v)
+                        }
+                      />
+                    </div>
+                    <Input
+                      type="date"
+                      label="Datum"
+                      value={c.date}
+                      onChange={(v) =>
+                        updateList("certificates", i, "date", v)
+                      }
+                    />
+                  </Card>
+                ))}
+              </div>
             </Section>
 
             {/* FILES */}
-            <Section id="files" title="Dateien" icon={FileText} sectionRefs={sectionRefs}>
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Photo dropzone */}
-                <Dropzone
-                  title="Profilfoto"
-                  subtitle="PNG/JPG, max 5MB"
+            <Section
+              id="files"
+              title="Dateien (Uploads)"
+              icon={FileText}
+              sectionRefs={sectionRefs}
+            >
+              <div className="grid md:grid-cols-2 gap-6 mb-6">
+                <FileUpload
+                  label="Profilfoto"
+                  accept="image/*"
                   icon={ImageIcon}
                   preview={photoPreview}
-                  accept="image/*"
-                  onPick={handlePhotoChange}
+                  onChange={handlePhotoChange}
+                  info="JPG, PNG, WEBP max 5MB"
                 />
-
-                {/* CV dropzone */}
-                <Dropzone
-                  title="CV (PDF)"
-                  subtitle="PDF, max 10MB"
-                  icon={FileText}
+                <FileUpload
+                  label="Lebenslauf (CV)"
                   accept="application/pdf"
-                  onPick={handleCvChange}
-                  fileName={cvFile?.name || (item?.cvFilePath ? "Vorhanden" : "")}
+                  icon={FileText}
+                  fileName={
+                    cvFile?.name || (item?.cvFilePath ? "CV ist vorhanden" : null)
+                  }
+                  onChange={handleCvChange}
+                  info="Nur PDF, max 10MB"
+                />
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-6">
+                <FileUpload
+                  label="Zertifikat"
+                  accept="application/pdf,image/*"
+                  icon={Award}
+                  fileName={
+                    certificateFile?.name ||
+                    (item?.certificateFilePath ? "Zertifikat vorhanden" : null)
+                  }
+                  onChange={handleCertificateChange}
+                  info="PDF / JPG / PNG / WEBP max 10MB"
+                />
+                <FileUpload
+                  label="Übersetzung von Zertifikaten/Diplomen"
+                  accept="application/pdf,image/*"
+                  icon={FileText}
+                  fileName={
+                    diplomaFile?.name ||
+                    (item?.diplomaFilePath ? "Diplomübersetzung verfügbar" : null)
+                  }
+                  onChange={handleDiplomaChange}
+                  info="PDF / JPG / PNG / WEBP max 10MB"
+                />
+                <FileUpload
+                  label="Reisepass (optional)"
+                  accept="application/pdf,image/*"
+                  icon={FileText}
+                  fileName={
+                    passportFile?.name ||
+                    (item?.passportFilePath ? "Reisepass vorhanden" : null)
+                  }
+                  onChange={handlePassportChange}
+                  info="Optional, PDF / JPG / PNG / WEBP max 10MB"
                 />
               </div>
             </Section>
-          </main>
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t bg-white">
-          <p className="text-sm text-gray-500">
-            * Pflichtfelder
-          </p>
-          <div className="flex gap-2">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold transition"
-              disabled={saving}
-            >
-              Abbrechen
-            </button>
-            <button
-              onClick={handleSave}
-              className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-lg transition inline-flex items-center gap-2"
-              disabled={saving}
-            >
-              <Save className="w-4 h-4" />
-              {saving ? "Speichern..." : "Speichern"}
-            </button>
           </div>
         </div>
-      </div>
 
-      {/* Tailwind utils */}
-      <style jsx>{`
-        .input {
-          width: 100%;
-          border: 1px solid #e5e7eb;
-          background: white;
-          padding: 0.7rem 0.9rem;
-          border-radius: 0.9rem;
-          outline: none;
-          transition: 0.15s;
-          font-size: 0.95rem;
-        }
-        .input:focus {
-          border-color: #3b82f6;
-          box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
-        }
-      `}</style>
+        {/* 4. Footer */}
+        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-end gap-3 z-20">
+          <button
+            onClick={onClose}
+            className="px-6 py-2.5 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-white hover:shadow-sm transition"
+          >
+            Abbrechen
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {saving ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Save className="w-5 h-5" />
+            )}
+            <span>Speichern</span>
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
-/* ---------------- UI helpers ---------------- */
+// --- SUB COMPONENTS FOR CLEANER CODE ---
 
-function Section({ id, title, icon: Icon, action, children, sectionRefs }) {
-  return (
-    <section
-      ref={(el) => (sectionRefs.current[id] = el)}
-      data-section={id}
-      className="scroll-mt-6"
-    >
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center">
-            <Icon className="w-5 h-5" />
-          </div>
-          <h3 className="text-lg font-bold text-gray-900">{title}</h3>
+const Section = ({ id, title, icon: Icon, action, children, sectionRefs }) => (
+  <section
+    ref={(el) => (sectionRefs.current[id] = el)}
+    data-section={id}
+    className="scroll-mt-24 group"
+  >
+    <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-2">
+      <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+        <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+          <Icon className="w-5 h-5" />
         </div>
-        {action}
-      </div>
-      <div className="bg-white border border-gray-200 rounded-2xl p-4 md:p-5 shadow-sm">
+        {title}
+      </h3>
+      {action}
+    </div>
+    <div>{children}</div>
+  </section>
+);
+
+const Input = ({
+  label,
+  value,
+  onChange,
+  type = "text",
+  placeholder,
+  className = "",
+  bg = "bg-gray-50",
+}) => (
+  <div className={`flex flex-col gap-1.5 ${className}`}>
+    {label && (
+      <label className="text-xs font-bold text-gray-500 uppercase tracking-wide ml-1">
+        {label}
+      </label>
+    )}
+    <input
+      type={type}
+      value={value || ""}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className={`w-full px-4 py-2.5 rounded-xl border border-gray-200 ${bg} focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none text-gray-800 text-sm`}
+    />
+  </div>
+);
+
+const Select = ({ label, value, onChange, children }) => (
+  <div className="flex flex-col gap-1.5">
+    {label && (
+      <label className="text-xs font-bold text-gray-500 uppercase tracking-wide ml-1">
+        {label}
+      </label>
+    )}
+    <div className="relative">
+      <select
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full appearance-none px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none text-gray-800 text-sm"
+      >
         {children}
+      </select>
+      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+        <svg
+          className="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
       </div>
-    </section>
-  );
-}
-
-function Field({ label, children }) {
-  return (
-    <label className="block">
-      <div className="text-xs font-bold text-gray-600 uppercase mb-2">{label}</div>
-      {children}
-    </label>
-  );
-}
-
-function Card({ children, compact }) {
-  return (
-    <div className={`border border-gray-200 rounded-2xl p-4 bg-gray-50/40 ${compact ? "" : "space-y-3"}`}>
-      {children}
     </div>
-  );
-}
+  </div>
+);
 
-function AddButton({ onClick }) {
-  return (
+// TextArea – maxLength va counter bilan
+const TextArea = ({ label, value, onChange, rows = 3, maxLength }) => (
+  <div className="flex flex-col gap-1.5">
+    {label && (
+      <label className="text-xs font-bold text-gray-500 uppercase tracking-wide ml-1">
+        {label}
+      </label>
+    )}
+    <textarea
+      rows={rows}
+      value={value || ""}
+      onChange={(e) => onChange(e.target.value)}
+      maxLength={maxLength}
+      className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all outline-none text-gray-800 text-sm resize-none"
+    />
+    {maxLength && (
+      <div className="text-[11px] text-gray-400 text-right mt-1">
+        {(value?.length || 0)}/{maxLength}
+      </div>
+    )}
+  </div>
+);
+
+const Card = ({ children, onRemove, title }) => (
+  <div className="relative p-5 rounded-2xl border border-gray-200 bg-white shadow-sm hover:shadow-md transition-shadow group">
+    {title && (
+      <div className="text-xs font-bold text-gray-400 uppercase mb-3">
+        {title}
+      </div>
+    )}
     <button
-      onClick={onClick}
-      className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 shadow transition"
-      type="button"
+      onClick={onRemove}
+      className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition opacity-0 group-hover:opacity-100"
     >
-      <Plus className="w-4 h-4" />
-      Hinzufügen
+      <Trash2 className="w-5 h-5" />
     </button>
-  );
-}
+    {children}
+  </div>
+);
 
-function RemoveButton({ onClick }) {
-  return (
-    <button
-      onClick={onClick}
-      type="button"
-      className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-red-600 hover:text-red-700"
-    >
-      <Trash2 className="w-4 h-4" />
-      Entfernen
-    </button>
-  );
-}
+const FeatureToggle = ({ icon: Icon, label, checked, onChange }) => (
+  <button
+    onClick={() => onChange(!checked)}
+    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all
+         ${
+           checked
+             ? "bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-200"
+             : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+         }
+      `}
+  >
+    <Icon className="w-4 h-4" />
+    {label}
+    {checked && <CheckCircle2 className="w-4 h-4 ml-1" />}
+  </button>
+);
 
-function EmptyHint({ text }) {
-  return <p className="text-sm text-gray-500">{text}</p>;
-}
+const AddButton = ({ onClick, small }) => (
+  <button
+    onClick={onClick}
+    className={`flex items-center gap-1.5 rounded-lg font-medium transition-colors text-indigo-600 bg-indigo-50 hover:bg-indigo-100
+         ${small ? "px-3 py-1.5 text-xs" : "px-4 py-2 text-sm"}
+      `}
+  >
+    <Plus className="w-4 h-4" /> Hinzufügen
+  </button>
+);
 
-function Toggle({ icon: Icon, label, checked, onChange }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!checked)}
-      className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold transition
-      ${checked ? "bg-blue-600 text-white border-blue-600 shadow" : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"}`}
-    >
-      <Icon className="w-4 h-4" />
-      {label}
-    </button>
-  );
-}
+const EmptyState = ({ text }) => (
+  <div className="text-center py-6 border-2 border-dashed border-gray-100 rounded-2xl bg-gray-50/50">
+    <p className="text-gray-400 text-sm">{text}</p>
+  </div>
+);
 
-function Dropzone({ title, subtitle, icon: Icon, accept, onPick, preview, fileName }) {
+const FileUpload = ({ label, accept, icon: Icon, preview, fileName, onChange, info }) => {
   const inputRef = useRef(null);
-
-  const pick = () => inputRef.current?.click();
-
-  const onFile = (e) => {
-    const file = e.target.files?.[0];
-    if (file) onPick(file);
-  };
-
   return (
-    <div className="border border-dashed border-gray-300 rounded-2xl p-5 bg-white hover:border-blue-400 transition">
-      <div className="flex items-start gap-4">
-        <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center">
-          <Icon className="w-6 h-6 text-gray-500" />
-        </div>
-        <div className="flex-1">
-          <h4 className="font-bold text-gray-900">{title}</h4>
-          <p className="text-sm text-gray-500">{subtitle}</p>
+    <div
+      onClick={() => inputRef.current?.click()}
+      className="cursor-pointer group relative flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-200 hover:border-indigo-400 rounded-2xl bg-gray-50 hover:bg-indigo-50/30 transition-all text-center"
+    >
+      <input
+        ref={inputRef}
+        type="file"
+        hidden
+        accept={accept}
+        onChange={(e) => onChange(e.target.files?.[0])}
+      />
 
-          {preview && (
-            <img
-              src={preview}
-              alt="preview"
-              className="mt-3 w-32 h-32 rounded-xl object-cover border"
-            />
+      {preview ? (
+        <img
+          src={preview}
+          alt="preview"
+          className="w-24 h-24 object-cover rounded-full shadow-md mb-2"
+        />
+      ) : (
+        <div
+          className={`w-14 h-14 rounded-full flex items-center justify-center mb-3 transition-colors ${
+            fileName
+              ? "bg-green-100 text-green-600"
+              : "bg-indigo-100 text-indigo-600 group-hover:scale-110"
+          }`}
+        >
+          {fileName ? (
+            <CheckCircle2 className="w-7 h-7" />
+          ) : (
+            <Icon className="w-7 h-7" />
           )}
-
-          {fileName && !preview && (
-            <p className="mt-3 text-sm font-semibold text-gray-700">
-              Datei: {fileName}
-            </p>
-          )}
-
-          <div className="mt-4 flex gap-2">
-            <button
-              type="button"
-              onClick={pick}
-              className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold text-sm transition"
-            >
-              Datei wählen
-            </button>
-          </div>
-
-          <input
-            ref={inputRef}
-            hidden
-            type="file"
-            accept={accept}
-            onChange={onFile}
-          />
         </div>
-      </div>
+      )}
+
+      <div className="font-bold text-gray-700 mb-1">{label}</div>
+      <div className="text-xs text-gray-400">{fileName || info}</div>
+      {fileName && !preview && (
+        <div className="mt-2 text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">
+          Datei ausgewählt
+        </div>
+      )}
     </div>
   );
-}
+};

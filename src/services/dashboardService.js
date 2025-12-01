@@ -65,8 +65,31 @@ const dashboardService = {
     }).then(res => res.data);
   },
 
+  uploadCandidateCertificate: (id, file) => {
+    const form = new FormData();
+    form.append("file", file);
+
+    return axios.post(`${API_URL}/candidates/${id}/certificate`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }).then(res => res.data);
+  },uploadCandidateDiploma: (id, file) => {
+    const form = new FormData();
+    form.append("file", file);
+
+    return axios.post(`${API_URL}/candidates/${id}/diploma`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }).then(res => res.data);
+  },uploadCandidatePassport: (id, file) => {
+    const form = new FormData();
+    form.append("file", file);
+
+    return axios.post(`${API_URL}/candidates/${id}/passport`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }).then(res => res.data);
+  },
+
   // Full create: JSON + photo + cv
-  createCandidateFull: async (data, photo, cv) => {
+  createCandidateFull: async (data, photo, cv, certificate, diploma, passport) => {
     const created = await axios.post(`${API_URL}/candidates`, data).then(res => res.data);
 
     const id = created.data.id;
@@ -77,6 +100,15 @@ const dashboardService = {
 
     if (cv) {
       await dashboardService.uploadCandidateCv(id, cv);
+    }
+    if (certificate) {
+      await dashboardService.uploadCandidateCertificate(id, certificate);
+    }
+    if (diploma) {
+      await dashboardService.uploadCandidateDiploma(id, diploma);
+    }
+    if (passport) {
+      await dashboardService.uploadCandidatePassport(id, passport);
     }
 
     return id;
