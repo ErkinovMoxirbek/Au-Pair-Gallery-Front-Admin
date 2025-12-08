@@ -86,11 +86,10 @@ export default function UserModal({ show, onClose, item, onSave }) {
     else if (!/\S+@\S+\.\S+/.test(formData.email))
       newErrors.email = 'Das E-Mail-Format ist ungültig.';
 
-    // create paytida password majburiy
-    if (!item && !formData.password)
-      newErrors.password = 'Passwort ist erforderlich.';
-    else if (!item && formData.password.length < 6)
+    // Parol endi majburiy emas – faqat kiritilsa tekshiramiz
+    if (formData.password && formData.password.length < 6) {
       newErrors.password = 'Das Passwort muss mindestens 6 Zeichen lang sein.';
+    }
 
     if (!formData.role) newErrors.role = 'Bitte wählen Sie eine Rolle aus.';
 
@@ -140,12 +139,9 @@ export default function UserModal({ show, onClose, item, onSave }) {
         dataToSend.role = formData.role;
       }
 
-      // password faqat kerak bo‘lganda
+      // password faqat kiritilganda yuboriladi
       if (formData.password) {
         dataToSend.password = formData.password;
-      } else if (item) {
-        // tahrirlashda bo‘sh bo‘lsa passwordni umuman yubormaymiz
-        // (demak o‘zgarmaydi)
       }
 
       await onSave(dataToSend);
@@ -242,32 +238,30 @@ export default function UserModal({ show, onClose, item, onSave }) {
                 )}
               </div>
 
-              {/* Passwort */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Passwort{' '}
-                  {item ? (
+              {/* Passwort faqat EDIT rejimida */}
+              {item && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Passwort{' '}
                     <span className="text-gray-400 text-xs">(optional)</span>
-                  ) : (
-                    <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      errors.password ? 'border-red-300' : 'border-gray-300'
+                    }`}
+                    placeholder="Neues Passwort (optional)"
+                  />
+                  {errors.password && (
+                    <p className="text-red-500 text-xs mt-1">
+                      {errors.password}
+                    </p>
                   )}
-                </label>
-                <input
-                  type="text"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    errors.password ? 'border-red-300' : 'border-gray-300'
-                  }`}
-                  placeholder="••••••"
-                />
-                {errors.password && (
-                  <p className="text-red-500 text-xs mt-1">
-                    {errors.password}
-                  </p>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Rolle */}
               <div className="md:col-span-2">
