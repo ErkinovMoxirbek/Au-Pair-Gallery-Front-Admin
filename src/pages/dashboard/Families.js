@@ -26,8 +26,8 @@ import dashboardService from "../../services/dashboardService";
 import LoadingSpinner from "../../components/shared/LoadingSpinner";
 import FamilyModal from "../../components/shared/FamilyModal";
 
-// --- Helper: qiymatlarni chiroyli formatlash (No -> Ma'lumot yo'q) ---
-function formatValue(value, fallback = "Maʼlumot yoʻq") {
+// --- Helper: Werte schön formatieren (No -> Keine Angabe) ---
+function formatValue(value, fallback = "Keine Angabe") {
   if (value === null || value === undefined) return fallback;
 
   if (typeof value === "string") {
@@ -40,10 +40,10 @@ function formatValue(value, fallback = "Maʼlumot yoʻq") {
     return trimmed;
   }
 
-  return value; // sonlar va boshqa tiplar uchun
+  return value; // für Zahlen und andere Typen
 }
 
-// --- Oila rasmi uchun avatar ---
+// --- Avatar für Familie ---
 function FamilyAvatar({ name, size = "md" }) {
   const initial = name ? name.charAt(0).toUpperCase() : "F";
   const sizeClasses =
@@ -58,7 +58,7 @@ function FamilyAvatar({ name, size = "md" }) {
   );
 }
 
-// --- Oila card komponenti ---
+// --- Familienkarten-Komponente ---
 function FamilyCard({ family, onSelect, onEdit, onDelete }) {
   const statusColor =
     family.status === "ACTIVE"
@@ -82,7 +82,7 @@ function FamilyCard({ family, onSelect, onEdit, onDelete }) {
             <span
               className={`mt-1 inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full w-fit ${statusColor}`}
             >
-              {family.status === "ACTIVE" ? "Aktiv" : "Nofaol"}
+              {family.status === "ACTIVE" ? "Aktiv" : "Inaktiv"}
             </span>
           </div>
         </div>
@@ -100,19 +100,19 @@ function FamilyCard({ family, onSelect, onEdit, onDelete }) {
       <div className="space-y-1 text-sm text-gray-600 border-t border-b border-gray-100 py-4 mb-4">
         <p className="flex items-center gap-2">
           <Users className="w-4 h-4 text-indigo-400" />
-          <span>Oila a'zolari:</span>
+          <span>Familienmitglieder:</span>
           <span className="font-semibold">{family.members ?? "—"}</span>
         </p>
         <p className="flex items-center gap-2">
           <Baby className="w-4 h-4 text-indigo-400" />
-          <span>Bolalar soni:</span>
+          <span>Anzahl der Kinder:</span>
           <span className="font-semibold">{family.childrenCount ?? 0}</span>
         </p>
         <p className="flex items-center gap-2 truncate">
           <Clock className="w-4 h-4 text-indigo-400" />
-          <span>Ish soati:</span>
+          <span>Arbeitszeit:</span>
           <span className="font-semibold">
-            {family.workingHoursPerWeek || "Nomaʼlum"} soat
+            {family.workingHoursPerWeek || "Unbekannt"} Stunden
           </span>
         </p>
       </div>
@@ -125,7 +125,7 @@ function FamilyCard({ family, onSelect, onEdit, onDelete }) {
             onEdit(family);
           }}
           className="p-2 text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition"
-          title="Tahrirlash"
+          title="Bearbeiten"
         >
           <Edit className="w-5 h-5" />
         </button>
@@ -135,7 +135,7 @@ function FamilyCard({ family, onSelect, onEdit, onDelete }) {
             onDelete(family.id);
           }}
           className="p-2 text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition"
-          title="O'chirish"
+          title="Löschen"
         >
           <Trash2 className="w-5 h-5" />
         </button>
@@ -144,7 +144,7 @@ function FamilyCard({ family, onSelect, onEdit, onDelete }) {
   );
 }
 
-// --- Main component ---
+// --- Hauptkomponente ---
 export default function Families() {
   const [families, setFamilies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -159,7 +159,7 @@ export default function Families() {
     loadFamilies();
   }, []);
 
-  // API dan oilalarni yuklash
+  // Familien aus der API laden
   const loadFamilies = async () => {
     setLoading(true);
     try {
@@ -183,7 +183,7 @@ export default function Families() {
 
       setFamilies(list);
     } catch (error) {
-      console.error("Oilalarni yuklashda xatolik:", error);
+      console.error("Fehler beim Laden der Familien:", error);
       setFamilies([]);
     } finally {
       setLoading(false);
@@ -210,33 +210,33 @@ export default function Families() {
     closeDetailModal();
   };
 
-  // 🔥 MUHIM: YANGI / ESKI OILA SAQLASH
+  // 🔥 WICHTIG: Neue / bestehende Familie speichern
   const handleSaveFamily = async (data) => {
     try {
       if (data.id) {
-        // EDIT mode
+        // Bearbeiten-Modus
         await dashboardService.updateFamily(data.id, data);
       } else {
-        // CREATE mode
+        // Erstellen-Modus
         await dashboardService.createFamily(data);
       }
       await loadFamilies();
     } catch (err) {
-      console.error("Family saqlashda xatolik:", err);
-      alert("Family saqlashda xatolik yuz berdi");
+      console.error("Fehler beim Speichern der Familie:", err);
+      alert("Beim Speichern der Familie ist ein Fehler aufgetreten.");
     }
   };
 
-  // 🔥 MUHIM: O‘CHIRISH
+  // 🔥 WICHTIG: Löschen
   const handleDelete = async (id) => {
-    if (!window.confirm("Rostdan ham bu oilani o'chirmoqchimisiz?")) return;
+    if (!window.confirm("Möchten Sie diese Familie wirklich löschen?")) return;
     try {
       await dashboardService.deleteFamily(id);
       closeDetailModal();
       await loadFamilies();
     } catch (err) {
-      console.error("Family o'chirishda xatolik:", err);
-      alert("Family o'chirishda xatolik yuz berdi");
+      console.error("Fehler beim Löschen der Familie:", err);
+      alert("Beim Löschen der Familie ist ein Fehler aufgetreten.");
     }
   };
 
@@ -258,14 +258,14 @@ export default function Families() {
         {/* Header and Controls */}
         <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <h1 className="text-3xl font-bold text-gray-900">
-            Oila Ro'yxati ({safeFamilies.length})
+            Familienliste ({safeFamilies.length})
           </h1>
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative">
               <Search className="w-5 h-5 text-gray-400 absolute left-4 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Oila yoki shahar bo'yicha qidirish..."
+                placeholder="Nach Familie oder Stadt suchen..."
                 value={searchTerm}
                 onChange={handleSearch}
                 className="w-full sm:w-64 pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl bg-white shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition"
@@ -275,7 +275,7 @@ export default function Families() {
             <button
               onClick={loadFamilies}
               className="px-4 py-2.5 text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-100 transition shadow-sm flex items-center justify-center gap-2"
-              title="Yangilash"
+              title="Aktualisieren"
             >
               <RefreshCcw className="w-5 h-5" />
             </button>
@@ -284,36 +284,7 @@ export default function Families() {
               className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold shadow-lg shadow-indigo-200 transition flex items-center justify-center gap-2"
             >
               <Plus className="w-5 h-5" />
-              Yangi oila
-            </button>
-          </div>
-        </div>
-
-        {/* View Mode and Status */}
-        <div className="flex items-center justify-between mb-6">
-          <span className="text-sm text-gray-600">
-            {filteredFamilies.length} ta oila topildi.
-          </span>
-          <div className="flex gap-2 p-1 bg-white border border-gray-200 rounded-xl shadow-sm">
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`p-2 rounded-lg transition ${
-                viewMode === "grid"
-                  ? "bg-indigo-50 text-indigo-600 shadow-sm"
-                  : "text-gray-500 hover:bg-gray-50"
-              }`}
-            >
-              <Grid className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setViewMode("list")}
-              className={`p-2 rounded-lg transition ${
-                viewMode === "list"
-                  ? "bg-indigo-50 text-indigo-600 shadow-sm"
-                  : "text-gray-500 hover:bg-gray-50"
-              }`}
-            >
-              <List className="w-5 h-5" />
+              Neue Familie
             </button>
           </div>
         </div>
@@ -325,10 +296,10 @@ export default function Families() {
           <div className="text-center p-20 bg-white rounded-3xl border border-dashed border-gray-300">
             <Users className="w-12 h-12 mx-auto text-gray-400 mb-4" />
             <p className="text-xl font-semibold text-gray-700">
-              Hech qanday oila topilmadi
+              Keine Familie gefunden
             </p>
             <p className="text-gray-500">
-              Qidiruv shartlarini tekshiring yoki yangi oila qo'shing.
+              Überprüfen Sie die Suchkriterien oder fügen Sie eine neue Familie hinzu.
             </p>
           </div>
         ) : (
@@ -386,7 +357,7 @@ function FamilyDetailDrawer({ show, onClose, family, onEdit, onDelete }) {
 
   const statusColor =
     family.status === "ACTIVE" ? "bg-green-500" : "bg-red-500";
-  const statusText = family.status === "ACTIVE" ? "Faol" : "Nofaol";
+  const statusText = family.status === "ACTIVE" ? "Aktiv" : "Inaktiv";
 
   return (
     <div
@@ -411,7 +382,7 @@ function FamilyDetailDrawer({ show, onClose, family, onEdit, onDelete }) {
                 <FamilyAvatar name={family.familyName} size="lg" />
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 leading-tight">
-                    {family.familyName} Oila
+                    Familie {family.familyName}
                   </h2>
                   <p className="text-sm text-gray-500">
                     {formatValue(family.city, "-")},{" "}
@@ -439,14 +410,14 @@ function FamilyDetailDrawer({ show, onClose, family, onEdit, onDelete }) {
                 <a
                   href={`tel:${family.phone}`}
                   className="text-indigo-600 hover:text-indigo-700 transition"
-                  title="Qo'ng'iroq"
+                  title="Anrufen"
                 >
                   <Phone className="w-5 h-5" />
                 </a>
                 <a
                   href={`mailto:${family.email}`}
                   className="text-indigo-600 hover:text-indigo-700 transition"
-                  title="Email yuborish"
+                  title="E-Mail senden"
                 >
                   <Mail className="w-5 h-5" />
                 </a>
@@ -456,24 +427,24 @@ function FamilyDetailDrawer({ show, onClose, family, onEdit, onDelete }) {
             {/* Detail Content */}
             <div className="flex-1 p-6 md:p-8 space-y-8 overflow-y-auto">
               {/* General */}
-              <DetailSection icon={User} title="Asosiy Ma'lumotlar">
+              <DetailSection icon={User} title="Allgemeine Informationen">
                 <DetailItem
-                  label="Ota/Ona ismi"
+                  label="Name von Vater/Mutter"
                   value={`${formatValue(family.fatherName, "-")} / ${formatValue(
                     family.motherName,
                     "-"
                   )}`}
                 />
                 <DetailItem
-                  label="A'zolar soni"
-                  value={`${family.members ?? "—"} kishi`}
+                  label="Anzahl der Mitglieder"
+                  value={`${family.members ?? "—"} Personen`}
                 />
                 <DetailItem
-                  label="So'zlashadigan tillar"
+                  label="Gesprochene Sprachen"
                   value={formatValue(family.languagesSpoken)}
                 />
                 <DetailItem
-                  label="Ro'yxatga olingan sana"
+                  label="Registrierungsdatum"
                   value={
                     family.createdAt
                       ? new Date(family.createdAt).toLocaleDateString("de-DE")
@@ -483,49 +454,49 @@ function FamilyDetailDrawer({ show, onClose, family, onEdit, onDelete }) {
               </DetailSection>
 
               {/* Address */}
-              <DetailSection icon={MapPin} title="Manzil">
+              <DetailSection icon={MapPin} title="Adresse">
                 <DetailItem
-                  label="Davlat/Shahar"
+                  label="Land / Stadt"
                   value={`${formatValue(family.country, "-")}, ${formatValue(
                     family.city,
                     "-"
                   )}`}
                 />
                 <DetailItem
-                  label="To'liq manzil"
+                  label="Vollständige Adresse"
                   value={formatValue(family.address)}
                   type="long"
                 />
               </DetailSection>
 
               {/* Children */}
-              <DetailSection icon={Baby} title="Bolalar Haqida">
+              <DetailSection icon={Baby} title="Informationen zu den Kindern">
                 <DetailItem
-                  label="Bolalar soni"
-                  value={`${family.childrenCount ?? 0} ta`}
+                  label="Anzahl der Kinder"
+                  value={`${family.childrenCount ?? 0} Kinder`}
                 />
                 <DetailItem
-                  label="Yoshlari"
+                  label="Alter"
                   value={formatValue(family.childrenAges)}
                   type="long"
                 />
                 <DetailItem
-                  label="Tavsif"
+                  label="Beschreibung"
                   value={formatValue(family.childrenDescription)}
                   type="long"
                 />
               </DetailSection>
 
               {/* Au Pair Requirements */}
-              <DetailSection icon={Briefcase} title="Talablar & Shartlar">
+              <DetailSection icon={Briefcase} title="Anforderungen & Bedingungen">
                 <DetailItem
                   icon={Clock}
-                  label="Haftalik ish soati"
-                  value={`${family.workingHoursPerWeek || "-"} soat`}
+                  label="Wöchentliche Arbeitszeit"
+                  value={`${family.workingHoursPerWeek || "-"} Stunden`}
                 />
                 <DetailItem
                   icon={DollarSign}
-                  label="Cho'ntak puli"
+                  label="Taschengeld"
                   value={
                     family.pocketMoney !== null &&
                     family.pocketMoney !== undefined
@@ -535,26 +506,26 @@ function FamilyDetailDrawer({ show, onClose, family, onEdit, onDelete }) {
                 />
                 <DetailItem
                   icon={Car}
-                  label="Haydovchilik shart"
-                  value={family.needsDrivingLicense ? "Ha" : "Yo'q"}
+                  label="Führerschein erforderlich"
+                  value={family.needsDrivingLicense ? "Ja" : "Nein"}
                 />
                 <DetailItem
                   icon={Utensils}
-                  label="Ovqat bilan ta'minlash"
-                  value={family.mealsProvided ? "Ha" : "Yo'q"}
+                  label="Verpflegung inklusive"
+                  value={family.mealsProvided ? "Ja" : "Nein"}
                 />
                 <DetailItem
-                  label="Vazifalar"
+                  label="Aufgaben"
                   value={formatValue(family.duties)}
                   type="long"
                 />
                 <DetailItem
-                  label="Xona sharoitlari"
+                  label="Zimmerbeschreibung"
                   value={formatValue(family.roomDescription)}
                   type="long"
                 />
                 <DetailItem
-                  label="Afzalliklar"
+                  label="Besondere Präferenzen"
                   value={formatValue(family.preferences)}
                   type="long"
                 />
@@ -568,7 +539,7 @@ function FamilyDetailDrawer({ show, onClose, family, onEdit, onDelete }) {
                 className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 font-semibold shadow-lg shadow-indigo-200 transition"
               >
                 <Edit className="w-5 h-5" />
-                Tahrirlash
+                Bearbeiten
               </button>
               <button
                 onClick={handleDeleteClick}
@@ -599,7 +570,7 @@ function DetailSection({ icon: Icon, title, children }) {
 
 function DetailItem({ icon: Icon, label, value, type = "short" }) {
   const displayValue =
-    type === "short" ? formatValue(value, "-") : formatValue(value, "Maʼlumot yoʻq");
+    type === "short" ? formatValue(value, "-") : formatValue(value, "Keine Angabe");
 
   return (
     <div

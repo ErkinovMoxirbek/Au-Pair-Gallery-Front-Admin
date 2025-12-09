@@ -327,7 +327,7 @@ export default function Candidates() {
   return (
     <div className="min-h-screen bg-gray-50/50 flex flex-col">
       {/* 1. Top Navigation / Action Bar */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30 px-4 py-4 sm:px-6 lg:px-8">
+      <header className="sticky z-30 px-4 py-4 sm:px-6 lg:px-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Kandidaten</h1>
@@ -338,13 +338,13 @@ export default function Candidates() {
 
           <div className="flex items-center gap-3">
             <div className="relative group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white-400 group-focus-within:text-indigo-500 transition-colors" />
               <input
                 type="text"
                 placeholder="Suchen..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 pr-4 py-2 bg-gray-100 border-transparent focus:bg-white border focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 rounded-lg text-sm w-full sm:w-64 transition-all"
+                className="w-full sm:w-64 pl-11 pr-4 py-2.5 border border-gray-200 rounded-xl bg-white shadow-sm focus:ring-indigo-500 focus:border-indigo-500 transition"
               />
             </div>
 
