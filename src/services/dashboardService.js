@@ -1,10 +1,11 @@
+// src/services/dashboardService.js
 import axios from 'axios';
 import API_URL from '../config';
 
 const dashboardService = {
 
   // ======================
-  // USERS (oldingi)
+  // USERS
   // ======================
   getUsers: () => axios.get(`${API_URL}/users`).then(res => res.data),
   getUser: (id) => axios.get(`${API_URL}/users/${id}`).then(res => res.data),
@@ -13,7 +14,7 @@ const dashboardService = {
   deleteUser: (id) => axios.delete(`${API_URL}/users/${id}`).then(res => res.data),
 
   // ======================
-  // FAMILIES (oldingi)
+  // FAMILIES
   // ======================
   getFamilies: () => axios.get(`${API_URL}/families`).then(res => res.data),
   getFamily: (id) => axios.get(`${API_URL}/families/${id}`).then(res => res.data),
@@ -22,44 +23,101 @@ const dashboardService = {
   deleteFamily: (id) => axios.delete(`${API_URL}/families/${id}`).then(res => res.data),
 
   // ======================
-  // CANDIDATES  🔥 (YANGI)
+  // CANDIDATES 🔥
   // ======================
 
-  // List
+  // Barcha kandidatlar ro'yxati
   getCandidates: () =>
     axios.get(`${API_URL}/candidates`).then(res => res.data),
 
-  // Get by ID (Full CV)
+  // ID bo'yicha olish (Full CV uchun)
   getCandidate: (id) =>
     axios.get(`${API_URL}/candidates/${id}`).then(res => res.data),
 
-  // Create (JSON)
+  // Status bo‘yicha filter (PENDING, ACTIVE, REJECTED, ...)
+  getCandidatesByStatus: (status) => {
+    const url = status
+      ? `${API_URL}/candidates/by/status?status=${status}`
+      : `${API_URL}/candidates/by/status`;
+    return axios.get(url).then(res => res.data);
+  },
+
+  // Yangi kandidat yaratish (faqat JSON, faylsiz)
   createCandidate: (data) =>
     axios.post(`${API_URL}/candidates`, data).then(res => res.data),
 
-  // Update (JSON)
+  // To'liq update qilish (faqat JSON, faylsiz)
   updateCandidate: (id, data) =>
     axios.put(`${API_URL}/candidates/${id}`, data).then(res => res.data),
 
-  // Delete
+  // Statusni yangilash (message optional)
+  updateCandidateStatus: (id, status, message) =>
+    axios
+      .patch(
+        `${API_URL}/candidates/${id}/status`,
+        null,
+        {
+          params: { status, message },
+        }
+      )
+      .then((res) => res.data),
+
+  // O'chirish
   deleteCandidate: (id) =>
     axios.delete(`${API_URL}/candidates/${id}`).then(res => res.data),
 
-  // Upload PHOTO (multipart/form-data)
-  uploadCandidatePhoto: (id, file) => {
-    const form = new FormData();
-    form.append("file", file);
+  // ======================
+  // CANDIDATE PHOTOS (MULTI)
+  // ======================
 
-    return axios.post(`${API_URL}/candidates/${id}/photo`, form, {
+  /**
+   * Kandidat fotosuratlarini olish (backenddagi /{id}/photos GET)
+   * Array<CandidatePhotoResponse> qaytadi
+   */
+  getCandidatePhotos: (id) =>
+    axios.get(`${API_URL}/candidates/${id}/photos`).then(res => res.data),
+
+  /**
+   * Bir nechta fotosurat yuklash:
+   * files: File[]
+   * Backend: @PostMapping("/{id}/photos") @RequestParam("files") List<MultipartFile> files
+   */
+  uploadCandidatePhotos: (id, files = []) => {
+    const form = new FormData();
+    (files || []).forEach((file) => {
+      if (file) {
+        form.append("files", file);
+      }
+    });
+
+    return axios.post(`${API_URL}/candidates/${id}/photos`, form, {
       headers: { "Content-Type": "multipart/form-data" },
     }).then(res => res.data);
   },
 
-  // Upload CV (multipart/form-data)
+  /**
+   * Asosiy (main) rasmni o‘rnatish
+   */
+  setCandidateMainPhoto: (id, photoId) =>
+    axios
+      .patch(`${API_URL}/candidates/${id}/photos/${photoId}/main`)
+      .then(res => res.data),
+
+  /**
+   * Bitta rasmni o‘chirish
+   */
+  deleteCandidatePhoto: (id, photoId) =>
+    axios
+      .delete(`${API_URL}/candidates/${id}/photos/${photoId}`)
+      .then(res => res.data),
+
+  // ======================
+  // FILE UPLOADS (CV, CERTIFICATE, DIPLOMA, PASSPORT)
+  // ======================
+
   uploadCandidateCv: (id, file) => {
     const form = new FormData();
     form.append("file", file);
-
     return axios.post(`${API_URL}/candidates/${id}/cv`, form, {
       headers: { "Content-Type": "multipart/form-data" },
     }).then(res => res.data);
@@ -68,58 +126,80 @@ const dashboardService = {
   uploadCandidateCertificate: (id, file) => {
     const form = new FormData();
     form.append("file", file);
-
     return axios.post(`${API_URL}/candidates/${id}/certificate`, form, {
       headers: { "Content-Type": "multipart/form-data" },
     }).then(res => res.data);
-  },uploadCandidateDiploma: (id, file) => {
+  },
+
+  uploadCandidateDiploma: (id, file) => {
     const form = new FormData();
     form.append("file", file);
-
     return axios.post(`${API_URL}/candidates/${id}/diploma`, form, {
       headers: { "Content-Type": "multipart/form-data" },
     }).then(res => res.data);
-  },uploadCandidatePassport: (id, file) => {
+  },
+
+  uploadCandidatePassport: (id, file) => {
     const form = new FormData();
     form.append("file", file);
-
     return axios.post(`${API_URL}/candidates/${id}/passport`, form, {
       headers: { "Content-Type": "multipart/form-data" },
     }).then(res => res.data);
   },
 
-  // Full create: JSON + photo + cv
-  createCandidateFull: async (data, photo, cv, certificate, diploma, passport) => {
-    const created = await axios.post(`${API_URL}/candidates`, data).then(res => res.data);
+  createCandidateFull: async (data, photoFiles = [], cv, certificate, diploma, passport) => {
+    // 1. JSON ni yaratamiz
+    const created = await axios
+      .post(`${API_URL}/candidates`, data)
+      .then(res => res.data);
 
-    const id = created.data.id;
+    // Backenddagi ApiResponse formatiga qarab ID ni olamiz:
+    // { status, message, data: { id, ... } } yoki { id, ... }
+    const id = created?.data?.id ?? created?.id;
 
-    if (photo) {
-      await dashboardService.uploadCandidatePhoto(id, photo);
+    if (!id) {
+      console.error("createCandidateFull: Kandidat ID topilmadi", created);
+      throw new Error("Kandidat yaratildi, lekin ID aniqlanmadi");
+    }
+
+    // 2. Fayllarni birin-ketin yuklaymiz
+    const uploadPromises = [];
+
+    // Multi photos (agar bo'lsa)
+    if (photoFiles && photoFiles.length > 0) {
+      uploadPromises.push(
+        dashboardService.uploadCandidatePhotos(id, photoFiles)
+      );
     }
 
     if (cv) {
-      await dashboardService.uploadCandidateCv(id, cv);
+      uploadPromises.push(dashboardService.uploadCandidateCv(id, cv));
     }
     if (certificate) {
-      await dashboardService.uploadCandidateCertificate(id, certificate);
+      uploadPromises.push(dashboardService.uploadCandidateCertificate(id, certificate));
     }
     if (diploma) {
-      await dashboardService.uploadCandidateDiploma(id, diploma);
+      uploadPromises.push(dashboardService.uploadCandidateDiploma(id, diploma));
     }
     if (passport) {
-      await dashboardService.uploadCandidatePassport(id, passport);
+      uploadPromises.push(dashboardService.uploadCandidatePassport(id, passport));
     }
 
+    if (uploadPromises.length > 0) {
+      await Promise.all(uploadPromises);
+    }
+
+    // Tashqariga senga oldingidek ID qaytaramiz
     return id;
   },
 
   // ======================
-  // OTHER OLD SERVICES
+  // OTHER SERVICES
   // ======================
   getStats: () => axios.get(`${API_URL}/stats`).then(res => res.data),
 
   getApplications: () => axios.get(`${API_URL}/applications`).then(res => res.data),
+
   updateApplicationStatus: (id, status) =>
     axios.patch(`${API_URL}/applications/${id}/status`, { status }).then(res => res.data),
 
@@ -128,7 +208,6 @@ const dashboardService = {
 
   getEvents: () => axios.get(`${API_URL}/events`).then(res => res.data),
   createEvent: (data) => axios.post(`${API_URL}/events`, data).then(res => res.data),
-
 };
 
 export default dashboardService;

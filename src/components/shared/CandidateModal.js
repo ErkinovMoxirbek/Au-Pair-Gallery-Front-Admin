@@ -1,4 +1,4 @@
-// src/components/shared/CandidateModal.js - MODERN REDESIGN (MULTI FILE UPLOAD + VALIDATION)
+// src/components/shared/CandidateModal.js - MULTI PHOTO UPLOAD (2-5) + IMMEDIATE DELETE
 import { useEffect, useRef, useState } from "react";
 import {
   X,
@@ -21,6 +21,8 @@ import {
   Calendar,
 } from "lucide-react";
 
+import dashboardService from "../../services/dashboardService";
+
 // Navigatsiya bo'limlari
 const SECTIONS = [
   { id: "personal", label: "Persönliche", icon: User },
@@ -34,10 +36,8 @@ const SECTIONS = [
   { id: "files", label: "Dateien", icon: FileText },
 ];
 
-// Language level enum (backend bilan mos)
 const LANGUAGE_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2", "NATIVE"];
 
-// Bo'sh obyektlar (Factories)
 const emptyExperience = () => ({
   positionTitle: "",
   companyName: "",
@@ -59,7 +59,6 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
   const [saving, setSaving] = useState(false);
   const [activeSection, setActiveSection] = useState("personal");
 
-  // Form Data State
   const [formData, setFormData] = useState({
     name: "",
     surname: "",
@@ -89,23 +88,21 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
     certificates: [],
   });
 
-  // Files
-  const [photoFile, setPhotoFile] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(null);
-  const [cvFile, setCvFile] = useState(null);
+  // photos: [{ id?, file?, preview, isExisting }]
+  const [photos, setPhotos] = useState([]);
 
-  // YANGI fayl state'lar
+  const [cvFile, setCvFile] = useState(null);
   const [certificateFile, setCertificateFile] = useState(null);
   const [diplomaFile, setDiplomaFile] = useState(null);
   const [passportFile, setPassportFile] = useState(null);
 
-  // Refs for scroll handling
   const sectionRefs = useRef({});
   const containerRef = useRef(null);
 
-  // Initialize Data
+  // === EDIT MODE INIT ===
   useEffect(() => {
     if (!item) return;
+
     setFormData((p) => ({
       ...p,
       ...item,
@@ -115,16 +112,54 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
       hobbies: item.hobbies || [],
       certificates: item.certificates || [],
     }));
-    if (item.profileImagePath) setPhotoPreview(item.profileImagePath);
 
-    // mavjud fayl pathlar bo'lsa, yangi fayl tanlanmaguncha null bo'lib turadi
+    // Barcha rasmlarni inicializatsiya qilish
+    let initialPhotos = [];
+
+    // 1) Agar backend item.photos jo‘natayotgan bo‘lsa
+    if (Array.isArray(item.photos) && item.photos.length > 0) {
+      // item.photos bo'lishi mumkin:
+      //  - string[] (faqat URL’lar)
+      //  - {id, url}[]
+      initialPhotos = item.photos.map((p) => {
+        if (typeof p === "string") {
+          return {
+            id: undefined,
+            file: null,
+            preview: p,
+            isExisting: true,
+          };
+        }
+        return {
+          id: p.id,
+          file: null,
+          preview: p.url,
+          isExisting: true,
+        };
+      });
+    } else if (item.profileImagePath) {
+      // eski backend faqat bitta profil rasmini yuborayotgan bo‘lsa
+      initialPhotos = [
+        {
+          id: undefined,
+          file: null,
+          preview: item.profileImagePath,
+          isExisting: true,
+        },
+      ];
+    } else {
+      initialPhotos = [];
+    }
+
+    setPhotos(initialPhotos);
+
     setCvFile(null);
     setCertificateFile(null);
     setDiplomaFile(null);
     setPassportFile(null);
   }, [item]);
 
-  // Reset on Open (yangi candidate)
+  // === CREATE MODE RESET ===
   useEffect(() => {
     if (!show) return;
     if (!item) {
@@ -156,8 +191,7 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
         hobbies: [],
         certificates: [],
       });
-      setPhotoFile(null);
-      setPhotoPreview(null);
+      setPhotos([]);
       setCvFile(null);
       setCertificateFile(null);
       setDiplomaFile(null);
@@ -165,7 +199,7 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
     }
   }, [show, item]);
 
-  // Scroll Spy Logic
+  // === SCROLL SPY ===
   useEffect(() => {
     if (!show) return;
     const root = containerRef.current;
@@ -197,7 +231,7 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
     }
   };
 
-  // === FAYL VALIDATSIYA HELPERI ===
+  // === VALIDATION HELPER ===
   const validateFile = (file, options) => {
     const { allowedMimePrefixes = [], allowedExtensions = [], fieldLabel, maxSizeMB } = options;
 
@@ -206,7 +240,6 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
     const mime = file.type || "";
     const name = file.name?.toLowerCase() || "";
 
-    // 1) Hajmni tekshirish (ixtiyoriy)
     if (maxSizeMB && file.size > maxSizeMB * 1024 * 1024) {
       alert(
         `${fieldLabel} uchun fayl hajmi ${maxSizeMB} MB dan oshmasligi kerak. Tanlagan fayl: ${(
@@ -217,12 +250,10 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
       return false;
     }
 
-    // 2) MIME turi bo‘yicha
     const mimeOk =
       allowedMimePrefixes.length === 0 ||
       allowedMimePrefixes.some((p) => mime.startsWith(p));
 
-    // 3) Kengaytma bo‘yicha
     const extOk =
       allowedExtensions.length === 0 ||
       allowedExtensions.some((ext) => name.endsWith(ext));
@@ -241,19 +272,22 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
     return true;
   };
 
-  // State Helpers
+  // === FORM HELPERS ===
   const update = (field, value) =>
     setFormData((p) => ({
       ...p,
       [field]: value,
     }));
+
   const add = (listName, factory) =>
     setFormData((p) => ({ ...p, [listName]: [...p[listName], factory()] }));
+
   const remove = (listName, idx) =>
     setFormData((p) => ({
       ...p,
       [listName]: p[listName].filter((_, i) => i !== idx),
     }));
+
   const updateList = (listName, idx, field, value) =>
     setFormData((p) => {
       const next = [...p[listName]];
@@ -261,94 +295,95 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
       return { ...p, [listName]: next };
     });
 
-  // Handlers + Fayl validatsiyasi
-
-  const handlePhotoChange = (file) => {
-    if (!file) return;
-
-    const ok = validateFile(file, {
-      fieldLabel: "Profilfoto",
-      maxSizeMB: 5,
-      allowedMimePrefixes: ["image/"],
-      allowedExtensions: [".jpg", ".jpeg", ".png", ".webp"],
-    });
-
-    if (!ok) return;
-
-    setPhotoFile(file);
-    setPhotoPreview(URL.createObjectURL(file));
-  };
-
+  // === SINGLE FILE HANDLERS ===
   const handleCvChange = (file) => {
     if (!file) return;
-
     const ok = validateFile(file, {
       fieldLabel: "Lebenslauf (CV)",
       maxSizeMB: 10,
       allowedMimePrefixes: ["application/pdf"],
       allowedExtensions: [".pdf"],
     });
-
     if (!ok) return;
-
     setCvFile(file);
   };
 
   const handleCertificateChange = (file) => {
     if (!file) return;
-
     const ok = validateFile(file, {
       fieldLabel: "Zertifikat",
       maxSizeMB: 10,
       allowedMimePrefixes: ["application/pdf", "image/"],
       allowedExtensions: [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
     });
-
     if (!ok) return;
-
     setCertificateFile(file);
   };
 
   const handleDiplomaChange = (file) => {
     if (!file) return;
-
     const ok = validateFile(file, {
       fieldLabel: "Diplom / Übersetzung",
       maxSizeMB: 10,
       allowedMimePrefixes: ["application/pdf", "image/"],
       allowedExtensions: [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
     });
-
     if (!ok) return;
-
     setDiplomaFile(file);
   };
 
   const handlePassportChange = (file) => {
     if (!file) return;
-
     const ok = validateFile(file, {
       fieldLabel: "Reisepass",
       maxSizeMB: 10,
       allowedMimePrefixes: ["application/pdf", "image/"],
       allowedExtensions: [".pdf", ".jpg", ".jpeg", ".png", ".webp"],
     });
-
     if (!ok) return;
-
     setPassportFile(file);
   };
 
+  // 🔥 Eski rasmni darhol backenddan o'chirish
+  const handleExistingPhotoRemoved = async (photoId) => {
+    // Yangi kandidat bo'lsa yoki photoId yo'q bo'lsa – serverda hali hech narsa yo'q
+    if (!photoId || !item?.id) return;
+
+    try {
+      await dashboardService.deleteCandidatePhoto(item.id, photoId);
+      // Agar backenddan error bo'lsa – UI allaqachon rasmni o'chirgan bo'ladi,
+      // xohlasang, bu yerda reload ham qilsa bo'ladi.
+    } catch (e) {
+      console.error("Fehler beim Löschen des Fotos:", e);
+      alert("Foto konnte auf dem Server nicht gelöscht werden.");
+    }
+  };
+
+  // === SAVE ===
   const handleSave = async () => {
     if (!formData.name?.trim() || !formData.surname?.trim()) {
       alert("Bitte Vor- und Nachnamen eingeben.");
       return;
     }
+
+    const hasExistingCandidate = !!item?.id;
+    const totalPhotosCount = photos.length;
+
+    if (!hasExistingCandidate && (totalPhotosCount < 2 || totalPhotosCount > 5)) {
+      alert("Für neue Kandidaten müssen zwischen 2 und 5 Profilfotos hochgeladen werden.");
+      return;
+    }
+
+    // faqat yangi yuklangan fayllar
+    const newPhotoFiles = photos
+      .filter((p) => p.file)
+      .map((p) => p.file);
+
     try {
       setSaving(true);
       await onSave(
         formData,
-        photoFile,
+        newPhotoFiles,
         cvFile,
         certificateFile,
         diplomaFile,
@@ -371,7 +406,7 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
 
       {/* Modal Card */}
       <div className="relative bg-white w-full max-w-5xl h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        {/* 1. Header */}
+        {/* Header */}
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white z-20">
           <div>
             <h2 className="text-xl font-bold text-gray-900">
@@ -391,7 +426,7 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
           </div>
         </div>
 
-        {/* 2. Horizontal Sticky Nav */}
+        {/* Nav */}
         <div className="border-b border-gray-100 bg-gray-50/50 overflow-x-auto no-scrollbar">
           <div className="flex px-6 items-center gap-1 min-w-max p-2">
             {SECTIONS.map((s) => {
@@ -421,7 +456,7 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
           </div>
         </div>
 
-        {/* 3. Main Content (Scrollable) */}
+        {/* Content */}
         <div
           ref={containerRef}
           className="flex-1 overflow-y-auto p-6 md:p-8 bg-white scroll-smooth"
@@ -817,7 +852,7 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
               </div>
             </Section>
 
-            {/* CERTIFICATES (meta ma'lumotlar, fayl alohida files bo'limida) */}
+            {/* CERTIFICATES */}
             <Section
               id="certs"
               title="Zertifikate"
@@ -868,14 +903,14 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
               sectionRefs={sectionRefs}
             >
               <div className="grid md:grid-cols-2 gap-6 mb-6">
-                <FileUpload
-                  label="Profilfoto"
-                  accept="image/*"
-                  icon={ImageIcon}
-                  preview={photoPreview}
-                  onChange={handlePhotoChange}
-                  info="JPG, PNG, WEBP max 5MB"
+                {/* MULTI PHOTO UPLOAD */}
+                <MultiPhotoUpload
+                  photos={photos}
+                  setPhotos={setPhotos}
+                  validateFile={validateFile}
+                  onExistingRemove={handleExistingPhotoRemoved}
                 />
+
                 <FileUpload
                   label="Lebenslauf (CV)"
                   accept="application/pdf"
@@ -927,7 +962,7 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
           </div>
         </div>
 
-        {/* 4. Footer */}
+        {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-end gap-3 z-20">
           <button
             onClick={onClose}
@@ -953,7 +988,7 @@ export default function CandidateModal({ show, onClose, item, onSave }) {
   );
 }
 
-// --- SUB COMPONENTS FOR CLEANER CODE ---
+// --- SUB COMPONENTS ---
 
 const Section = ({ id, title, icon: Icon, action, children, sectionRefs }) => (
   <section
@@ -1028,7 +1063,6 @@ const Select = ({ label, value, onChange, children }) => (
   </div>
 );
 
-// TextArea – maxLength va counter bilan
 const TextArea = ({ label, value, onChange, rows = 3, maxLength }) => (
   <div className="flex flex-col gap-1.5">
     {label && (
@@ -1102,6 +1136,7 @@ const EmptyState = ({ text }) => (
   </div>
 );
 
+// Single file upload
 const FileUpload = ({ label, accept, icon: Icon, preview, fileName, onChange, info }) => {
   const inputRef = useRef(null);
   return (
@@ -1144,6 +1179,112 @@ const FileUpload = ({ label, accept, icon: Icon, preview, fileName, onChange, in
       {fileName && !preview && (
         <div className="mt-2 text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded">
           Datei ausgewählt
+        </div>
+      )}
+    </div>
+  );
+};
+
+// === MULTI PHOTO UPLOAD COMPONENT ===
+const MultiPhotoUpload = ({ photos, setPhotos, validateFile, onExistingRemove }) => {
+  const inputRef = useRef(null);
+
+  const handleFilesSelected = (filesList) => {
+    if (!filesList || filesList.length === 0) return;
+
+    const incoming = Array.from(filesList);
+    const next = [...photos];
+
+    for (const file of incoming) {
+      const ok = validateFile(file, {
+        fieldLabel: "Profilfoto",
+        maxSizeMB: 5,
+        allowedMimePrefixes: ["image/"],
+        allowedExtensions: [".jpg", ".jpeg", ".png", ".webp"],
+      });
+      if (!ok) continue;
+
+      next.push({
+        id: undefined,
+        file,
+        preview: URL.createObjectURL(file),
+        isExisting: false,
+      });
+
+      if (next.length >= 5) break;
+    }
+
+    if (next.length > 5) {
+      alert("Maximal 5 Profilfotos sind erlaubt.");
+    }
+
+    setPhotos(next.slice(0, 5));
+  };
+
+  const handleRemove = (index) => {
+    setPhotos((prev) => {
+      const target = prev[index];
+
+      // eski rasm bo'lsa va id bo'lsa -> backendga delete signal yuboramiz
+      if (target?.isExisting && target.id && onExistingRemove) {
+        onExistingRemove(target.id);
+      }
+
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const total = photos.length;
+
+  return (
+    <div className="space-y-3">
+      <div
+        onClick={() => inputRef.current?.click()}
+        className="cursor-pointer group relative flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-200 hover:border-indigo-400 rounded-2xl bg-gray-50 hover:bg-indigo-50/30 transition-all text-center"
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          hidden
+          accept="image/*"
+          multiple
+          onChange={(e) => handleFilesSelected(e.target.files)}
+        />
+
+        <div className="w-14 h-14 rounded-full flex items-center justify-center mb-3 bg-indigo-100 text-indigo-600 group-hover:scale-110 transition">
+          <ImageIcon className="w-7 h-7" />
+        </div>
+
+        <div className="font-bold text-gray-700 mb-1">Profilfotos (2–5)</div>
+        <div className="text-xs text-gray-400">
+          JPG, PNG, WEBP – max 5MB pro Datei
+        </div>
+        <div className="mt-1 text-xs text-gray-500">
+          Aktuell ausgewählt: <span className="font-semibold">{total}</span> / 5
+        </div>
+      </div>
+
+      {photos.length > 0 && (
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+          {photos.map((p, idx) => (
+            <div
+              key={idx}
+              className="relative group border border-gray-200 rounded-xl overflow-hidden bg-gray-50"
+            >
+              <img
+                src={p.preview}
+                alt={`photo-${idx}`}
+                className="w-full h-28 object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => handleRemove(idx)}
+                className="absolute top-1.5 right-1.5 bg-white/80 hover:bg-white text-red-500 rounded-full p-1 shadow-sm opacity-0 group-hover:opacity-100 transition"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </div>

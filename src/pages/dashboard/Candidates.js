@@ -1,4 +1,4 @@
-// src/pages/dashboard/Candidates.js - MODERN REDESIGN (Erweiterte Version)
+// src/pages/dashboard/Candidates.js - MODERN REDESIGN (Erweiterte Version mit Carousel)
 import { useState, useEffect, useMemo } from "react";
 import {
   Search,
@@ -17,6 +17,7 @@ import {
   Calendar,
   MoreHorizontal,
   ChevronRight,
+  ChevronLeft,
   User,
   IdCard,
   Award,
@@ -66,38 +67,43 @@ const languageLevelLabels = {
 
 // --- Sub-components ---
 
-// Avatar (modernisiert mit Status-Punkt Platzhalter)
+// Avatar – endi to'rtburchak card-style preview (kartochka), dumaloq emas
 function CandidateAvatar({ name, profileImagePath, size = "md", className = "" }) {
   const [imgError, setImgError] = useState(false);
 
   const sizeClasses = {
-    sm: "w-10 h-10 text-xs",
-    md: "w-14 h-14 text-lg",
-    lg: "w-24 h-24 text-3xl",
-    xl: "w-32 h-32 text-4xl",
+    sm: "w-20 h-16",
+    md: "w-24 h-20",
+    lg: "w-32 h-24",
+    xl: "w-40 h-32",
   };
 
-  const containerClass = `relative inline-block ${className}`;
-  const imgClass = `${sizeClasses[size]} rounded-full object-cover border-4 border-white shadow-sm`;
-  const fallbackClass = `${sizeClasses[size]} rounded-full flex items-center justify-center bg-indigo-100 text-indigo-600 font-bold border-4 border-white shadow-sm`;
+  const containerClass = `
+    relative inline-block overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 shadow-sm 
+    ${sizeClasses[size]} ${className}
+  `;
 
   useEffect(() => {
-    // Wenn sich der Bildpfad ändert, Fehlerstatus zurücksetzen
     setImgError(false);
   }, [profileImagePath]);
+
+  const initials = name?.charAt(0)?.toUpperCase() || "C";
 
   return (
     <div className={containerClass}>
       {!profileImagePath || imgError ? (
-        <div className={fallbackClass}>{name?.charAt(0)?.toUpperCase() || "C"}</div>
+        <div className="w-full h-full flex items-center justify-center text-xl font-bold text-indigo-500 bg-indigo-50">
+          {initials}
+        </div>
       ) : (
         <img
           src={profileImagePath}
           alt={name}
-          className={imgClass}
+          className="w-full h-full object-cover"
           onError={() => setImgError(true)}
         />
       )}
+      <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
     </div>
   );
 }
@@ -115,15 +121,113 @@ const Badge = ({ icon: Icon, label, color = "gray" }) => {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium ${
-        colors[color] || colors.gray
-      }`}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium ${colors[color] || colors.gray
+        }`}
     >
       {Icon && <Icon className="w-3.5 h-3.5" />}
       {label}
     </span>
   );
 };
+
+// Drawer ichidagi rasm carousel (multi-photo slayder)
+function CandidatePhotoCarousel({
+  photos,
+  activeIndex,
+  setActiveIndex,
+  fallbackUrl,
+  name,
+}) {
+  const hasPhotos = photos && photos.length > 0;
+  const safeIndex = hasPhotos
+    ? Math.min(Math.max(activeIndex, 0), photos.length - 1)
+    : 0;
+
+  const currentUrl = hasPhotos ? photos[safeIndex]?.url : fallbackUrl;
+
+  const handlePrev = (e) => {
+    e.stopPropagation();
+    if (!hasPhotos) return;
+    setActiveIndex((prev) =>
+      prev <= 0 ? photos.length - 1 : prev - 1
+    );
+  };
+
+  const handleNext = (e) => {
+    e.stopPropagation();
+    if (!hasPhotos) return;
+    setActiveIndex((prev) =>
+      prev >= photos.length - 1 ? 0 : prev + 1
+    );
+  };
+
+  const initials = name?.charAt(0)?.toUpperCase() || "C";
+
+  return (
+    <div className="w-full mb-4">
+      {/* Katta preview */}
+      <div className="relative w-full aspect-[4/3] rounded-3xl overflow-hidden bg-gray-100 shadow-md">
+        {currentUrl ? (
+          <img
+            src={currentUrl}
+            alt={name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-5xl font-bold text-gray-300">
+            {initials}
+          </div>
+        )}
+
+        {hasPhotos && photos.length > 1 && (
+          <>
+            <button
+              onClick={handlePrev}
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 backdrop-blur flex items-center justify-center text-gray-700 hover:bg-white shadow-md"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleNext}
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 backdrop-blur flex items-center justify-center text-gray-700 hover:bg-white shadow-md"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+
+            <div className="absolute right-3 bottom-3 px-2 py-1 rounded-full bg-black/50 text-[11px] text-white">
+              {safeIndex + 1}/{photos.length}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Thumb’lar */}
+      {hasPhotos && (
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          {photos.map((p, idx) => (
+            <button
+              key={p.id ?? idx}
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveIndex(idx);
+              }}
+              className={`relative flex-shrink-0 w-16 h-16 rounded-2xl overflow-hidden border ${idx === safeIndex
+                  ? "border-indigo-500 ring-2 ring-indigo-300"
+                  : "border-gray-200 opacity-75 hover:opacity-100"
+                }`}
+            >
+              <img
+                src={p.url}
+                alt={`${name} Foto ${idx + 1}`}
+                className="w-full h-full object-cover"
+              />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Candidates() {
   // State
@@ -140,6 +244,10 @@ export default function Candidates() {
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
+  // Drawer uchun rasm state (multi-photo)
+  const [candidatePhotos, setCandidatePhotos] = useState([]);
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+
   useEffect(() => {
     loadCandidates();
   }, []);
@@ -147,8 +255,8 @@ export default function Candidates() {
   const loadCandidates = async () => {
     setLoading(true);
     try {
-      // API-Call (Pagination/Sort optional – hier Standardwerte)
-      const res = await dashboardService.getCandidates(0, 50, "id", "desc");
+      // API-Call – dashboardService.getCandidates endi parametrsiz
+      const res = await dashboardService.getCandidates();
       const list = res?.data?.content || res?.data || res || [];
       setCandidates(Array.isArray(list) ? list : []);
     } catch (error) {
@@ -159,18 +267,26 @@ export default function Candidates() {
   };
 
   /**
-   * Aktualisiertes handleSave:
-   * Nimmt alle Dateien vom CandidateModal entgegen:
-   * (candidateData, photoFile, cvFile, certificateFile, diplomaFile, passportFile)
+   * handleSave:
+   * - CandidateModal dan keladigan photos parametri
+   *   ham bitta File, ham File[] bo‘lishi mumkin.
+   *   Biz uni har doim massivga aylantirib olamiz (seniorcha orqaga moslik 😉)
    */
   const handleSave = async (
     candidateData,
-    photoFile,
+    photosInput,        // File | File[]
     cvFile,
     certificateFile,
     diplomaFile,
     passportFile
   ) => {
+    // Uni har doim massivga aylantiramiz
+    const photoFiles = Array.isArray(photosInput)
+      ? photosInput
+      : photosInput
+        ? [photosInput]
+        : [];
+
     try {
       if (editingCandidate) {
         // === UPDATE ===
@@ -179,76 +295,49 @@ export default function Candidates() {
         // 1) JSON-Daten aktualisieren
         await dashboardService.updateCandidate(id, candidateData);
 
-        // 2) Dateien an separate Endpoints schicken (falls vorhanden)
+        // 2) Fayllarni upload qilish
         const uploads = [];
 
-        if (photoFile) {
-          uploads.push(dashboardService.uploadCandidatePhoto(id, photoFile));
+        if (photoFiles.length > 0) {
+          uploads.push(dashboardService.uploadCandidatePhotos(id, photoFiles));
         }
         if (cvFile) {
           uploads.push(dashboardService.uploadCandidateCv(id, cvFile));
         }
         if (certificateFile) {
-          uploads.push(dashboardService.uploadCandidateCertificate(id, certificateFile));
+          uploads.push(
+            dashboardService.uploadCandidateCertificate(id, certificateFile)
+          );
         }
         if (diplomaFile) {
           uploads.push(dashboardService.uploadCandidateDiploma(id, diplomaFile));
         }
         if (passportFile) {
-          uploads.push(dashboardService.uploadCandidatePassport(id, passportFile));
+          uploads.push(
+            dashboardService.uploadCandidatePassport(id, passportFile)
+          );
         }
 
         if (uploads.length > 0) {
           await Promise.all(uploads);
         }
       } else {
-        // === CREATE ===
-        const newCandidateRes = await dashboardService.createCandidate(candidateData);
-        const created = newCandidateRes?.data || newCandidateRes;
-        const newCandidateId = created?.id;
-
-        if (newCandidateId) {
-          const uploads = [];
-
-          if (photoFile) {
-            uploads.push(
-              dashboardService.uploadCandidatePhoto(newCandidateId, photoFile)
-            );
-          }
-          if (cvFile) {
-            uploads.push(
-              dashboardService.uploadCandidateCv(newCandidateId, cvFile)
-            );
-          }
-          if (certificateFile) {
-            uploads.push(
-              dashboardService.uploadCandidateCertificate(
-                newCandidateId,
-                certificateFile
-              )
-            );
-          }
-          if (diplomaFile) {
-            uploads.push(
-              dashboardService.uploadCandidateDiploma(newCandidateId, diplomaFile)
-            );
-          }
-          if (passportFile) {
-            uploads.push(
-              dashboardService.uploadCandidatePassport(newCandidateId, passportFile)
-            );
-          }
-
-          if (uploads.length > 0) {
-            await Promise.all(uploads);
-          }
-        }
+        // === CREATE FULL ===
+        // Yangi service: JSON + multi-photo + boshqa fayllar bir joydan
+        await dashboardService.createCandidateFull(
+          candidateData,
+          photoFiles,
+          cvFile,
+          certificateFile,
+          diplomaFile,
+          passportFile
+        );
       }
 
       await loadCandidates(); // Liste aktualisieren
       closeCreateModal();
 
-      // Wenn der Detail-Drawer offen ist und wir gerade editiert haben, Details neu laden
+      // Agar Drawer ochiq bo'lsa va biz edit qilgan bo'lsak, detail'ni qayta yuklash
       if (isDrawerOpen && editingCandidate) {
         openDrawer({ id: editingCandidate.id });
       }
@@ -284,14 +373,42 @@ export default function Candidates() {
 
   const openDrawer = async (candidate) => {
     if (!candidate) return;
-    // Sofort grobe Infos anzeigen
+
+    // Old data: card'dan
     setSelectedCandidate(candidate);
     setIsDrawerOpen(true);
     setDetailLoading(true);
+    setCandidatePhotos([]);
+    setActivePhotoIndex(0);
+
     try {
-      // Vollständige Daten laden (inkl. Presigned-URLs)
+      // 1) Full candidate details
       const res = await dashboardService.getCandidate(candidate.id);
-      setSelectedCandidate(res?.data || candidate);
+      const fullCandidate = res?.data || candidate;
+      setSelectedCandidate(fullCandidate);
+
+      // 2) Fotosuratlar ro'yxati (multi)
+      try {
+        const photosRes = await dashboardService.getCandidatePhotos(candidate.id);
+        const photos = Array.isArray(photosRes)
+          ? photosRes
+          : photosRes?.data || [];
+        setCandidatePhotos(photos || []);
+
+        if (photos && photos.length > 0) {
+          const mainUrl =
+            fullCandidate.profileImagePath || candidate.profileImagePath;
+          if (mainUrl) {
+            const mainIndex = photos.findIndex((p) => p.url === mainUrl);
+            setActivePhotoIndex(mainIndex >= 0 ? mainIndex : 0);
+          } else {
+            setActivePhotoIndex(0);
+          }
+        }
+      } catch (err) {
+        console.warn("Fotos konnten nicht geladen werden:", err);
+        setCandidatePhotos([]);
+      }
     } catch (e) {
       console.error("Fehler beim Laden der vollständigen Daten:", e);
       alert("Beim Laden der Kandidatendetails ist ein Fehler aufgetreten.");
@@ -302,8 +419,11 @@ export default function Candidates() {
 
   const closeDrawer = () => {
     setIsDrawerOpen(false);
-    // Nach Animation aufräumen
-    setTimeout(() => setSelectedCandidate(null), 300);
+    setTimeout(() => {
+      setSelectedCandidate(null);
+      setCandidatePhotos([]);
+      setActivePhotoIndex(0);
+    }, 300);
   };
 
   // --- Filterung ---
@@ -330,7 +450,9 @@ export default function Candidates() {
       <header className="sticky z-30 px-4 py-4 sm:px-6 lg:px-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Kandidaten</h1>
+            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+              Kandidaten
+            </h1>
             <p className="text-sm text-gray-500">
               Alle Kandidaten und Verwaltung ({candidates.length} Stück)
             </p>
@@ -363,7 +485,7 @@ export default function Candidates() {
       <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto w-full">
         {filteredCandidates.length === 0 ? (
           <div className="text-center py-20">
-            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-20 h-20 bg-gray-100 rounded-3xl flex items-center justify-center mx-auto mb-4">
               <User className="w-10 h-10 text-gray-400" />
             </div>
             <h3 className="text-lg font-medium text-gray-900">
@@ -381,8 +503,8 @@ export default function Candidates() {
                 onClick={() => openDrawer(candidate)}
                 className="group bg-white rounded-2xl border border-gray-200 hover:border-indigo-300 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300 cursor-pointer flex flex-col overflow-hidden"
               >
-                {/* Card Header (Bg + Avatar) */}
-                <div className="h-20 bg-gradient-to-r from-gray-100 to-gray-200 relative">
+                {/* Card Header (Bg) */}
+                <div className="h-16 bg-gradient-to-r from-indigo-50 via-gray-50 to-gray-100 relative">
                   <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button className="p-1.5 bg-white/80 backdrop-blur rounded-full hover:bg-white text-gray-600">
                       <MoreHorizontal className="w-4 h-4" />
@@ -454,23 +576,20 @@ export default function Candidates() {
 
       {/* 3. Slide-over Drawer (Detailansicht) */}
       <div
-        className={`fixed inset-0 z-50 overflow-hidden ${
-          isDrawerOpen ? "pointer-events-auto" : "pointer-events-none"
-        }`}
+        className={`fixed inset-0 z-50 overflow-hidden ${isDrawerOpen ? "pointer-events-auto" : "pointer-events-none"
+          }`}
       >
         {/* Backdrop */}
         <div
-          className={`absolute inset-0 bg-gray-900/30 backdrop-blur-sm transition-opacity duration-300 ${
-            isDrawerOpen ? "opacity-100" : "opacity-0"
-          }`}
+          className={`absolute inset-0 bg-gray-900/30 backdrop-blur-sm transition-opacity duration-300 ${isDrawerOpen ? "opacity-100" : "opacity-0"
+            }`}
           onClick={closeDrawer}
         />
 
         {/* Panel */}
         <div
-          className={`absolute inset-y-0 right-0 max-w-2xl w-full bg-white shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${
-            isDrawerOpen ? "translate-x-0" : "translate-x-full"
-          }`}
+          className={`absolute inset-y-0 right-0 max-w-2xl w-full bg-white shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${isDrawerOpen ? "translate-x-0" : "translate-x-full"
+            }`}
         >
           {selectedCandidate && (
             <>
@@ -482,7 +601,10 @@ export default function Candidates() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
-                      openCreateModal(selectedCandidate); // Für Bearbeitung Modal öffnen
+                      openCreateModal({
+                        ...selectedCandidate,
+                        photos: candidatePhotos,   // 👈 drawer’da yuklangan barcha rasmini ham birga beramiz
+                      });
                     }}
                     className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
                   >
@@ -510,38 +632,42 @@ export default function Candidates() {
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8">
-                  {/* Hero Section */}
-                  <div className="flex flex-col items-center text-center">
-                    <CandidateAvatar
+                  {/* Hero Section: Carousel + Info */}
+                  <div className="space-y-4">
+                    <CandidatePhotoCarousel
+                      photos={candidatePhotos}
+                      activeIndex={activePhotoIndex}
+                      setActiveIndex={setActivePhotoIndex}
+                      fallbackUrl={selectedCandidate.profileImagePath}
                       name={selectedCandidate.name}
-                      profileImagePath={selectedCandidate.profileImagePath}
-                      size="xl"
-                      className="mb-4"
                     />
-                    <h2 className="text-2xl font-bold text-gray-900">
-                      {selectedCandidate.name} {selectedCandidate.surname}
-                    </h2>
-                    <p className="text-indigo-600 font-medium text-lg">
-                      {selectedCandidate.professionTitle || "Beruf nicht angegeben"}
-                    </p>
 
-                    <div className="flex flex-wrap justify-center gap-3 mt-4">
-                      {selectedCandidate.phone && (
-                        <a
-                          href={`tel:${selectedCandidate.phone}`}
-                          className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-full text-sm font-medium text-gray-700 hover:bg-gray-200 transition"
-                        >
-                          <Phone className="w-4 h-4" /> {selectedCandidate.phone}
-                        </a>
-                      )}
-                      {selectedCandidate.email && (
-                        <a
-                          href={`mailto:${selectedCandidate.email}`}
-                          className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-full text-sm font-medium text-gray-700 hover:bg-gray-200 transition"
-                        >
-                          <Mail className="w-4 h-4" /> E-Mail
-                        </a>
-                      )}
+                    <div className="flex flex-col items-center text-center">
+                      <h2 className="text-2xl font-bold text-gray-900">
+                        {selectedCandidate.name} {selectedCandidate.surname}
+                      </h2>
+                      <p className="text-indigo-600 font-medium text-lg">
+                        {selectedCandidate.professionTitle || "Beruf nicht angegeben"}
+                      </p>
+
+                      <div className="flex flex-wrap justify-center gap-3 mt-4">
+                        {selectedCandidate.phone && (
+                          <a
+                            href={`tel:${selectedCandidate.phone}`}
+                            className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-full text-sm font-medium text-gray-700 hover:bg-gray-200 transition"
+                          >
+                            <Phone className="w-4 h-4" /> {selectedCandidate.phone}
+                          </a>
+                        )}
+                        {selectedCandidate.email && (
+                          <a
+                            href={`mailto:${selectedCandidate.email}`}
+                            className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-full text-sm font-medium text-gray-700 hover:bg-gray-200 transition"
+                          >
+                            <Mail className="w-4 h-4" /> E-Mail
+                          </a>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -636,7 +762,8 @@ export default function Candidates() {
                         <div className="flex justify-between">
                           <span className="text-gray-500">Erwartetes Taschengeld:</span>
                           <span className="font-bold text-gray-900">
-                            €{selectedCandidate.expectedPocketMoney || "0"}
+                            €
+                            {selectedCandidate.expectedPocketMoney || "0"}
                           </span>
                         </div>
                         {selectedCandidate.desiredCountry && (
@@ -656,60 +783,60 @@ export default function Candidates() {
                     selectedCandidate.drivingLicense ||
                     selectedCandidate.smoker ||
                     selectedCandidate.petFriendly) && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {selectedCandidate.languages?.length > 0 && (
-                        <div className="space-y-3">
-                          <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
-                            Sprachen
-                          </h4>
-                          <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
-                            {selectedCandidate.languages.map((lang) => (
-                              <div
-                                key={lang.id}
-                                className="flex items-center justify-between gap-3"
-                              >
-                                <span className="font-medium text-gray-800">
-                                  {lang.language}
-                                </span>
-                                <span className="text-xs px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 font-semibold">
-                                  {languageLevelLabels[lang.level] || lang.level}
-                                </span>
-                              </div>
-                            ))}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {selectedCandidate.languages?.length > 0 && (
+                          <div className="space-y-3">
+                            <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+                              Sprachen
+                            </h4>
+                            <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
+                              {selectedCandidate.languages.map((lang) => (
+                                <div
+                                  key={lang.id}
+                                  className="flex items-center justify-between gap-3"
+                                >
+                                  <span className="font-medium text-gray-800">
+                                    {lang.language}
+                                  </span>
+                                  <span className="text-xs px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 font-semibold">
+                                    {languageLevelLabels[lang.level] || lang.level}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
 
-                      {(selectedCandidate.drivingLicense ||
-                        selectedCandidate.smoker ||
-                        selectedCandidate.petFriendly) && (
-                        <div className="space-y-3">
-                          <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
-                            Zusätzliche Merkmale
-                          </h4>
-                          <div className="bg-gray-50 rounded-xl p-4 flex flex-wrap gap-2 text-sm">
-                            {selectedCandidate.drivingLicense && (
-                              <Badge
-                                icon={Car}
-                                label="Führerschein vorhanden"
-                                color="orange"
-                              />
-                            )}
-                            {selectedCandidate.smoker && (
-                              <Badge icon={Cigarette} label="Raucher" color="red" />
-                            )}
-                            {selectedCandidate.petFriendly && (
-                              <Badge
-                                icon={PawPrint}
-                                label="Mag Tiere"
-                                color="green"
-                              />
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                        {(selectedCandidate.drivingLicense ||
+                          selectedCandidate.smoker ||
+                          selectedCandidate.petFriendly) && (
+                            <div className="space-y-3">
+                              <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+                                Zusätzliche Merkmale
+                              </h4>
+                              <div className="bg-gray-50 rounded-xl p-4 flex flex-wrap gap-2 text-sm">
+                                {selectedCandidate.drivingLicense && (
+                                  <Badge
+                                    icon={Car}
+                                    label="Führerschein vorhanden"
+                                    color="orange"
+                                  />
+                                )}
+                                {selectedCandidate.smoker && (
+                                  <Badge icon={Cigarette} label="Raucher" color="red" />
+                                )}
+                                {selectedCandidate.petFriendly && (
+                                  <Badge
+                                    icon={PawPrint}
+                                    label="Mag Tiere"
+                                    color="green"
+                                  />
+                                )}
+                              </div>
+                            </div>
+                          )}
+                      </div>
+                    )}
 
                   {/* Bildung */}
                   {selectedCandidate.educations?.length > 0 && (
@@ -803,7 +930,7 @@ export default function Candidates() {
                     </div>
                   )}
 
-                  {/* Zertifikate (aus Liste) */}
+                  {/* Zertifikate (Liste) */}
                   {selectedCandidate.certificates?.length > 0 && (
                     <div>
                       <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">
@@ -852,122 +979,122 @@ export default function Candidates() {
                     selectedCandidate.diplomaFilePath ||
                     selectedCandidate.passportFilePath
                   ) && (
-                    <div className="pt-6 space-y-4">
-                      <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
-                        Dokumente
-                      </h4>
+                      <div className="pt-6 space-y-4">
+                        <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
+                          Dokumente
+                        </h4>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {/* CV */}
-                        {selectedCandidate.cvFilePath && (
-                          <div className="border border-gray-200 rounded-2xl p-4 bg-gray-50 hover:bg-white hover:shadow-md transition flex flex-col gap-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-xl bg-gray-900 text-white flex items-center justify-center">
-                                <FileText className="w-5 h-5" />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {/* CV */}
+                          {selectedCandidate.cvFilePath && (
+                            <div className="border border-gray-200 rounded-2xl p-4 bg-gray-50 hover:bg-white hover:shadow-md transition flex flex-col gap-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-gray-900 text-white flex items-center justify-center">
+                                  <FileText className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    Lebenslauf (CV)
+                                  </p>
+                                  <p className="text-[11px] text-gray-500">
+                                    PDF-Dokument
+                                  </p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-sm font-semibold text-gray-900">
-                                  Lebenslauf (CV)
-                                </p>
-                                <p className="text-[11px] text-gray-500">
-                                  PDF-Dokument
-                                </p>
-                              </div>
+                              <a
+                                href={selectedCandidate.cvFilePath}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline self-start"
+                              >
+                                Ansehen →
+                              </a>
                             </div>
-                            <a
-                              href={selectedCandidate.cvFilePath}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline self-start"
-                            >
-                              Ansehen →
-                            </a>
-                          </div>
-                        )}
+                          )}
 
-                        {/* Zertifikat (einzelne Datei) */}
-                        {selectedCandidate.certificateFilePath && (
-                          <div className="border border-gray-200 rounded-2xl p-4 bg-gray-50 hover:bg-white hover:shadow-md transition flex flex-col gap-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center">
-                                <Award className="w-5 h-5" />
+                          {/* Zertifikat (einzelne Datei) */}
+                          {selectedCandidate.certificateFilePath && (
+                            <div className="border border-gray-200 rounded-2xl p-4 bg-gray-50 hover:bg-white hover:shadow-md transition flex flex-col gap-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center">
+                                  <Award className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    Zertifikat
+                                  </p>
+                                  <p className="text-[11px] text-gray-500">
+                                    Sprach- / Kurszertifikat
+                                  </p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-sm font-semibold text-gray-900">
-                                  Zertifikat
-                                </p>
-                                <p className="text-[11px] text-gray-500">
-                                  Sprach- / Kurszertifikat
-                                </p>
-                              </div>
+                              <a
+                                href={selectedCandidate.certificateFilePath}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline self-start"
+                              >
+                                Ansehen →
+                              </a>
                             </div>
-                            <a
-                              href={selectedCandidate.certificateFilePath}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline self-start"
-                            >
-                              Ansehen →
-                            </a>
-                          </div>
-                        )}
+                          )}
 
-                        {/* Diplom / Zeugnis */}
-                        {selectedCandidate.diplomaFilePath && (
-                          <div className="border border-gray-200 rounded-2xl p-4 bg-gray-50 hover:bg-white hover:shadow-md transition flex flex-col gap-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center">
-                                <GraduationCap className="w-5 h-5" />
+                          {/* Diplom / Zeugnis */}
+                          {selectedCandidate.diplomaFilePath && (
+                            <div className="border border-gray-200 rounded-2xl p-4 bg-gray-50 hover:bg-white hover:shadow-md transition flex flex-col gap-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center">
+                                  <GraduationCap className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    Diplom / Zeugnis
+                                  </p>
+                                  <p className="text-[11px] text-gray-500">
+                                    Bildungsdokument
+                                  </p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-sm font-semibold text-gray-900">
-                                  Diplom / Zeugnis
-                                </p>
-                                <p className="text-[11px] text-gray-500">
-                                  Bildungsdokument
-                                </p>
-                              </div>
+                              <a
+                                href={selectedCandidate.diplomaFilePath}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline self-start"
+                              >
+                                Ansehen →
+                              </a>
                             </div>
-                            <a
-                              href={selectedCandidate.diplomaFilePath}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline self-start"
-                            >
-                              Ansehen →
-                            </a>
-                          </div>
-                        )}
+                          )}
 
-                        {/* Reisepass */}
-                        {selectedCandidate.passportFilePath && (
-                          <div className="border border-gray-200 rounded-2xl p-4 bg-gray-50 hover:bg-white hover:shadow-md transition flex flex-col gap-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center">
-                                <IdCard className="w-5 h-5" />
+                          {/* Reisepass */}
+                          {selectedCandidate.passportFilePath && (
+                            <div className="border border-gray-200 rounded-2xl p-4 bg-gray-50 hover:bg-white hover:shadow-md transition flex flex-col gap-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center">
+                                  <IdCard className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <p className="text-sm font-semibold text-gray-900">
+                                    Reisepass
+                                  </p>
+                                  <p className="text-[11px] text-gray-500">
+                                    Reisepass-Scan
+                                  </p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-sm font-semibold text-gray-900">
-                                  Reisepass
-                                </p>
-                                <p className="text-[11px] text-gray-500">
-                                  Reisepass-Scan
-                                </p>
-                              </div>
+                              <a
+                                href={selectedCandidate.passportFilePath}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline self-start"
+                              >
+                                Ansehen →
+                              </a>
                             </div>
-                            <a
-                              href={selectedCandidate.passportFilePath}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline self-start"
-                            >
-                              Ansehen →
-                            </a>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
                   <div className="h-10"></div> {/* Bottom spacer */}
                 </div>
