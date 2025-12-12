@@ -1,4 +1,4 @@
-// src/pages/dashboard/Candidates.js - MODERN REDESIGN (Erweiterte Version mit Carousel)
+// src/pages/dashboard/Candidates.js
 import { useState, useEffect, useMemo } from "react";
 import {
   Search,
@@ -22,15 +22,16 @@ import {
   IdCard,
   Award,
   GraduationCap,
+  Maximize2, // Rasm kattalashtirish ikonkasini qo'shdik
 } from "lucide-react";
 
 import dashboardService from "../../services/dashboardService";
 import LoadingSpinner from "../../components/shared/LoadingSpinner";
 import CandidateModal from "../../components/shared/CandidateModal";
+import Toast from "../../components/shared/Toast"; // 🔥 Toast komponenti
 
 // --- Helpers ---
 
-// Datum richtig formatieren (DD.MM.YYYY)
 const formatDate = (dateString) => {
   if (!dateString) return "—";
   try {
@@ -67,8 +68,33 @@ const languageLevelLabels = {
 
 // --- Sub-components ---
 
-// Avatar – endi to'rtburchak card-style preview (kartochka), dumaloq emas
-function CandidateAvatar({ name, profileImagePath, size = "md", className = "" }) {
+// 🔥 1. YANGI: Rasm kattalashtirish uchun Lightbox Modali
+function ImageLightbox({ src, onClose }) {
+  if (!src) return null;
+
+  return (
+    <div 
+      className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+      onClick={onClose}
+    >
+      <button 
+        className="absolute top-5 right-5 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition"
+        onClick={onClose}
+      >
+        <X className="w-8 h-8" />
+      </button>
+      <img 
+        src={src} 
+        alt="Full view" 
+        className="max-w-full max-h-[90vh] rounded-lg shadow-2xl object-contain animate-in zoom-in-95 duration-200"
+        onClick={(e) => e.stopPropagation()} 
+      />
+    </div>
+  );
+}
+
+// Avatar Component (List view)
+function CandidateAvatar({ name, profileImagePath, size = "md", className = "", onZoom }) {
   const [imgError, setImgError] = useState(false);
 
   const sizeClasses = {
@@ -79,7 +105,7 @@ function CandidateAvatar({ name, profileImagePath, size = "md", className = "" }
   };
 
   const containerClass = `
-    relative inline-block overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 shadow-sm 
+    relative inline-block overflow-hidden rounded-2xl border border-gray-200 bg-gray-100 shadow-sm group/avatar
     ${sizeClasses[size]} ${className}
   `;
 
@@ -90,20 +116,28 @@ function CandidateAvatar({ name, profileImagePath, size = "md", className = "" }
   const initials = name?.charAt(0)?.toUpperCase() || "C";
 
   return (
-    <div className={containerClass}>
+    <div className={containerClass} onClick={(e) => e.stopPropagation()}> 
       {!profileImagePath || imgError ? (
         <div className="w-full h-full flex items-center justify-center text-xl font-bold text-indigo-500 bg-indigo-50">
           {initials}
         </div>
       ) : (
-        <img
-          src={profileImagePath}
-          alt={name}
-          className="w-full h-full object-cover"
-          onError={() => setImgError(true)}
-        />
+        <>
+          <img
+            src={profileImagePath}
+            alt={name}
+            className="w-full h-full object-cover"
+            onError={() => setImgError(true)}
+          />
+          {/* Zoom tugmasi */}
+          <div 
+            onClick={() => onZoom(profileImagePath)}
+            className="absolute inset-0 bg-black/40 opacity-0 group-hover/avatar:opacity-100 flex items-center justify-center transition-opacity cursor-pointer"
+          >
+            <Maximize2 className="w-5 h-5 text-white drop-shadow-md" />
+          </div>
+        </>
       )}
-      <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
     </div>
   );
 }
@@ -121,8 +155,7 @@ const Badge = ({ icon: Icon, label, color = "gray" }) => {
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium ${colors[color] || colors.gray
-        }`}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium ${colors[color] || colors.gray}`}
     >
       {Icon && <Icon className="w-3.5 h-3.5" />}
       {label}
@@ -130,13 +163,14 @@ const Badge = ({ icon: Icon, label, color = "gray" }) => {
   );
 };
 
-// Drawer ichidagi rasm carousel (multi-photo slayder)
+// Drawer Photo Carousel (Drawer view)
 function CandidatePhotoCarousel({
   photos,
   activeIndex,
   setActiveIndex,
   fallbackUrl,
   name,
+  onZoom 
 }) {
   const hasPhotos = photos && photos.length > 0;
   const safeIndex = hasPhotos
@@ -148,30 +182,29 @@ function CandidatePhotoCarousel({
   const handlePrev = (e) => {
     e.stopPropagation();
     if (!hasPhotos) return;
-    setActiveIndex((prev) =>
-      prev <= 0 ? photos.length - 1 : prev - 1
-    );
+    setActiveIndex((prev) => (prev <= 0 ? photos.length - 1 : prev - 1));
   };
 
   const handleNext = (e) => {
     e.stopPropagation();
     if (!hasPhotos) return;
-    setActiveIndex((prev) =>
-      prev >= photos.length - 1 ? 0 : prev + 1
-    );
+    setActiveIndex((prev) => (prev >= photos.length - 1 ? 0 : prev + 1));
   };
 
   const initials = name?.charAt(0)?.toUpperCase() || "C";
 
   return (
-    <div className="w-full mb-4">
+    <div className="w-full mb-4 group/carousel">
       {/* Katta preview */}
-      <div className="relative w-full aspect-[4/3] rounded-3xl overflow-hidden bg-gray-100 shadow-md">
+      <div 
+        className="relative w-full aspect-[4/3] rounded-3xl overflow-hidden bg-gray-100 shadow-md cursor-pointer"
+        onClick={() => currentUrl && onZoom(currentUrl)}
+      >
         {currentUrl ? (
           <img
             src={currentUrl}
             alt={name}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover transition-transform duration-500 group-hover/carousel:scale-105"
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-5xl font-bold text-gray-300">
@@ -179,22 +212,31 @@ function CandidatePhotoCarousel({
           </div>
         )}
 
+        {/* Hover overlay with zoom icon */}
+        {currentUrl && (
+             <div className="absolute inset-0 bg-black/0 group-hover/carousel:bg-black/10 transition-colors flex items-center justify-center">
+                 <div className="bg-white/90 p-2 rounded-full opacity-0 group-hover/carousel:opacity-100 transition-all transform scale-75 group-hover/carousel:scale-100 shadow-lg">
+                    <Maximize2 className="w-6 h-6 text-gray-800" />
+                 </div>
+             </div>
+        )}
+
         {hasPhotos && photos.length > 1 && (
           <>
             <button
               onClick={handlePrev}
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 backdrop-blur flex items-center justify-center text-gray-700 hover:bg-white shadow-md"
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 backdrop-blur flex items-center justify-center text-gray-700 hover:bg-white shadow-md z-10"
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
             <button
               onClick={handleNext}
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 backdrop-blur flex items-center justify-center text-gray-700 hover:bg-white shadow-md"
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/80 backdrop-blur flex items-center justify-center text-gray-700 hover:bg-white shadow-md z-10"
             >
               <ChevronRight className="w-5 h-5" />
             </button>
 
-            <div className="absolute right-3 bottom-3 px-2 py-1 rounded-full bg-black/50 text-[11px] text-white">
+            <div className="absolute right-3 bottom-3 px-2 py-1 rounded-full bg-black/50 text-[11px] text-white z-10">
               {safeIndex + 1}/{photos.length}
             </div>
           </>
@@ -203,7 +245,7 @@ function CandidatePhotoCarousel({
 
       {/* Thumb’lar */}
       {hasPhotos && (
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           {photos.map((p, idx) => (
             <button
               key={p.id ?? idx}
@@ -211,10 +253,11 @@ function CandidatePhotoCarousel({
                 e.stopPropagation();
                 setActiveIndex(idx);
               }}
-              className={`relative flex-shrink-0 w-16 h-16 rounded-2xl overflow-hidden border ${idx === safeIndex
-                  ? "border-indigo-500 ring-2 ring-indigo-300"
-                  : "border-gray-200 opacity-75 hover:opacity-100"
-                }`}
+              className={`relative flex-shrink-0 w-16 h-16 rounded-2xl overflow-hidden border transition-all ${
+                idx === safeIndex
+                  ? "border-indigo-500 ring-2 ring-indigo-300 scale-105"
+                  : "border-gray-200 opacity-70 hover:opacity-100"
+              }`}
             >
               <img
                 src={p.url}
@@ -229,6 +272,7 @@ function CandidatePhotoCarousel({
   );
 }
 
+// --- Main Page Component ---
 export default function Candidates() {
   // State
   const [candidates, setCandidates] = useState([]);
@@ -236,15 +280,19 @@ export default function Candidates() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
+  // Toast State
+  const [toast, setToast] = useState({ open: false, type: "info", message: "" });
+
+  // Lightbox State (Zoom Image)
+  const [zoomImage, setZoomImage] = useState(null);
+
   // Modals & Drawer
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState(null);
-
-  // Drawer State (rechte Seite)
   const [selectedCandidate, setSelectedCandidate] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  // Drawer uchun rasm state (multi-photo)
+  // Drawer Photos
   const [candidatePhotos, setCandidatePhotos] = useState([]);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
 
@@ -252,78 +300,61 @@ export default function Candidates() {
     loadCandidates();
   }, []);
 
+  // --- Helper: Show Toast ---
+  const showToast = (type, message) => {
+    setToast({ open: true, type, message });
+  };
+
+  const closeToast = () => {
+    setToast((prev) => ({ ...prev, open: false }));
+  };
+
   const loadCandidates = async () => {
     setLoading(true);
     try {
-      // API-Call – dashboardService.getCandidates endi parametrsiz
       const res = await dashboardService.getCandidates();
       const list = res?.data?.content || res?.data || res || [];
       setCandidates(Array.isArray(list) ? list : []);
     } catch (error) {
       console.error("Fehler beim Laden der Kandidaten:", error);
+      showToast("error", "Kandidaten konnten nicht geladen werden.");
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * handleSave:
-   * - CandidateModal dan keladigan photos parametri
-   *   ham bitta File, ham File[] bo‘lishi mumkin.
-   *   Biz uni har doim massivga aylantirib olamiz (seniorcha orqaga moslik 😉)
-   */
   const handleSave = async (
     candidateData,
-    photosInput,        // File | File[]
+    photosInput, 
     cvFile,
     certificateFile,
     diplomaFile,
     passportFile
   ) => {
-    // Uni har doim massivga aylantiramiz
     const photoFiles = Array.isArray(photosInput)
       ? photosInput
       : photosInput
-        ? [photosInput]
-        : [];
+      ? [photosInput]
+      : [];
 
     try {
       if (editingCandidate) {
         // === UPDATE ===
         const id = editingCandidate.id;
-
-        // 1) JSON-Daten aktualisieren
         await dashboardService.updateCandidate(id, candidateData);
 
-        // 2) Fayllarni upload qilish
         const uploads = [];
+        if (photoFiles.length > 0) uploads.push(dashboardService.uploadCandidatePhotos(id, photoFiles));
+        if (cvFile) uploads.push(dashboardService.uploadCandidateCv(id, cvFile));
+        if (certificateFile) uploads.push(dashboardService.uploadCandidateCertificate(id, certificateFile));
+        if (diplomaFile) uploads.push(dashboardService.uploadCandidateDiploma(id, diplomaFile));
+        if (passportFile) uploads.push(dashboardService.uploadCandidatePassport(id, passportFile));
 
-        if (photoFiles.length > 0) {
-          uploads.push(dashboardService.uploadCandidatePhotos(id, photoFiles));
-        }
-        if (cvFile) {
-          uploads.push(dashboardService.uploadCandidateCv(id, cvFile));
-        }
-        if (certificateFile) {
-          uploads.push(
-            dashboardService.uploadCandidateCertificate(id, certificateFile)
-          );
-        }
-        if (diplomaFile) {
-          uploads.push(dashboardService.uploadCandidateDiploma(id, diplomaFile));
-        }
-        if (passportFile) {
-          uploads.push(
-            dashboardService.uploadCandidatePassport(id, passportFile)
-          );
-        }
-
-        if (uploads.length > 0) {
-          await Promise.all(uploads);
-        }
+        if (uploads.length > 0) await Promise.all(uploads);
+        
+        showToast("success", "Kandidat erfolgreich aktualisiert!");
       } else {
         // === CREATE FULL ===
-        // Yangi service: JSON + multi-photo + boshqa fayllar bir joydan
         await dashboardService.createCandidateFull(
           candidateData,
           photoFiles,
@@ -332,30 +363,31 @@ export default function Candidates() {
           diplomaFile,
           passportFile
         );
+        showToast("success", "Neuer Kandidat erfolgreich erstellt!");
       }
 
-      await loadCandidates(); // Liste aktualisieren
+      await loadCandidates();
       closeCreateModal();
 
-      // Agar Drawer ochiq bo'lsa va biz edit qilgan bo'lsak, detail'ni qayta yuklash
       if (isDrawerOpen && editingCandidate) {
         openDrawer({ id: editingCandidate.id });
       }
     } catch (error) {
       console.error("Fehler beim Speichern:", error);
-      alert("Beim Speichern ist ein Fehler aufgetreten. Bitte Konsole prüfen.");
+      showToast("error", "Fehler beim Speichern. Bitte überprüfen Sie die Eingaben.");
     }
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm("Möchten Sie wirklich löschen?")) {
+    if (window.confirm("Möchten Sie diesen Kandidaten wirklich löschen?")) {
       try {
         await dashboardService.deleteCandidate(id);
         closeDrawer();
         await loadCandidates();
+        showToast("success", "Kandidat wurde gelöscht.");
       } catch (error) {
-        alert("Fehler beim Löschen: " + error.message);
         console.error("Delete error:", error);
+        showToast("error", "Fehler beim Löschen des Kandidaten.");
       }
     }
   };
@@ -373,8 +405,6 @@ export default function Candidates() {
 
   const openDrawer = async (candidate) => {
     if (!candidate) return;
-
-    // Old data: card'dan
     setSelectedCandidate(candidate);
     setIsDrawerOpen(true);
     setDetailLoading(true);
@@ -382,22 +412,17 @@ export default function Candidates() {
     setActivePhotoIndex(0);
 
     try {
-      // 1) Full candidate details
       const res = await dashboardService.getCandidate(candidate.id);
       const fullCandidate = res?.data || candidate;
       setSelectedCandidate(fullCandidate);
 
-      // 2) Fotosuratlar ro'yxati (multi)
       try {
         const photosRes = await dashboardService.getCandidatePhotos(candidate.id);
-        const photos = Array.isArray(photosRes)
-          ? photosRes
-          : photosRes?.data || [];
+        const photos = Array.isArray(photosRes) ? photosRes : photosRes?.data || [];
         setCandidatePhotos(photos || []);
 
         if (photos && photos.length > 0) {
-          const mainUrl =
-            fullCandidate.profileImagePath || candidate.profileImagePath;
+          const mainUrl = fullCandidate.profileImagePath || candidate.profileImagePath;
           if (mainUrl) {
             const mainIndex = photos.findIndex((p) => p.url === mainUrl);
             setActivePhotoIndex(mainIndex >= 0 ? mainIndex : 0);
@@ -407,11 +432,10 @@ export default function Candidates() {
         }
       } catch (err) {
         console.warn("Fotos konnten nicht geladen werden:", err);
-        setCandidatePhotos([]);
       }
     } catch (e) {
       console.error("Fehler beim Laden der vollständigen Daten:", e);
-      alert("Beim Laden der Kandidatendetails ist ein Fehler aufgetreten.");
+      showToast("error", "Details konnten nicht geladen werden.");
     } finally {
       setDetailLoading(false);
     }
@@ -426,7 +450,6 @@ export default function Candidates() {
     }, 300);
   };
 
-  // --- Filterung ---
   const filteredCandidates = useMemo(() => {
     if (!searchTerm) return candidates;
     const s = searchTerm.toLowerCase();
@@ -446,7 +469,21 @@ export default function Candidates() {
 
   return (
     <div className="min-h-screen bg-gray-50/50 flex flex-col">
-      {/* 1. Top Navigation / Action Bar */}
+      {/* Toast Notification */}
+      <Toast 
+        open={toast.open} 
+        type={toast.type} 
+        message={toast.message} 
+        onClose={closeToast} 
+      />
+
+      {/* Lightbox Modal (Rasm kattalashishi) */}
+      <ImageLightbox 
+        src={zoomImage} 
+        onClose={() => setZoomImage(null)} 
+      />
+
+      {/* Header */}
       <header className="sticky z-30 px-4 py-4 sm:px-6 lg:px-8">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -460,7 +497,7 @@ export default function Candidates() {
 
           <div className="flex items-center gap-3">
             <div className="relative group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white-400 group-focus-within:text-indigo-500 transition-colors" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors" />
               <input
                 type="text"
                 placeholder="Suchen..."
@@ -481,7 +518,7 @@ export default function Candidates() {
         </div>
       </header>
 
-      {/* 2. Main Content (Grid) */}
+      {/* Main Grid */}
       <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto w-full">
         {filteredCandidates.length === 0 ? (
           <div className="text-center py-20">
@@ -518,6 +555,7 @@ export default function Candidates() {
                       name={candidate.name}
                       profileImagePath={candidate.profileImagePath}
                       size="md"
+                      onZoom={(src) => setZoomImage(src)} // 🔥 Kartadan zoom qilish
                     />
                     <span className="text-xs font-mono text-gray-400 mb-1">
                       #{candidate.id}
@@ -552,13 +590,6 @@ export default function Candidates() {
                     {candidate.petFriendly && (
                       <Badge icon={PawPrint} label="Tierfreundlich" color="green" />
                     )}
-                    {!candidate.drivingLicense &&
-                      !candidate.smoker &&
-                      !candidate.petFriendly && (
-                        <span className="text-xs text-gray-400 italic">
-                          Keine zusätzlichen Merkmale
-                        </span>
-                      )}
                   </div>
 
                   <div className="pt-4 border-t border-gray-100 flex items-center justify-between text-sm">
@@ -574,23 +605,14 @@ export default function Candidates() {
         )}
       </main>
 
-      {/* 3. Slide-over Drawer (Detailansicht) */}
-      <div
-        className={`fixed inset-0 z-50 overflow-hidden ${isDrawerOpen ? "pointer-events-auto" : "pointer-events-none"
-          }`}
-      >
-        {/* Backdrop */}
+      {/* Drawer */}
+      <div className={`fixed inset-0 z-50 overflow-hidden ${isDrawerOpen ? "pointer-events-auto" : "pointer-events-none"}`}>
         <div
-          className={`absolute inset-0 bg-gray-900/30 backdrop-blur-sm transition-opacity duration-300 ${isDrawerOpen ? "opacity-100" : "opacity-0"
-            }`}
+          className={`absolute inset-0 bg-gray-900/30 backdrop-blur-sm transition-opacity duration-300 ${isDrawerOpen ? "opacity-100" : "opacity-0"}`}
           onClick={closeDrawer}
         />
 
-        {/* Panel */}
-        <div
-          className={`absolute inset-y-0 right-0 max-w-2xl w-full bg-white shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${isDrawerOpen ? "translate-x-0" : "translate-x-full"
-            }`}
-        >
+        <div className={`absolute inset-y-0 right-0 max-w-2xl w-full bg-white shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${isDrawerOpen ? "translate-x-0" : "translate-x-full"}`}>
           {selectedCandidate && (
             <>
               {/* Drawer Header */}
@@ -600,12 +622,7 @@ export default function Candidates() {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => {
-                      openCreateModal({
-                        ...selectedCandidate,
-                        photos: candidatePhotos,   // 👈 drawer’da yuklangan barcha rasmini ham birga beramiz
-                      });
-                    }}
+                    onClick={() => openCreateModal({ ...selectedCandidate, photos: candidatePhotos })}
                     className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
                   >
                     <Edit className="w-5 h-5" />
@@ -625,14 +642,14 @@ export default function Candidates() {
                 </div>
               </div>
 
-              {/* Drawer Content (Scrollable) */}
+              {/* Drawer Content */}
               {detailLoading ? (
                 <div className="flex-1 flex items-center justify-center">
                   <LoadingSpinner />
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8">
-                  {/* Hero Section: Carousel + Info */}
+                  {/* Carousel */}
                   <div className="space-y-4">
                     <CandidatePhotoCarousel
                       photos={candidatePhotos}
@@ -640,6 +657,7 @@ export default function Candidates() {
                       setActiveIndex={setActivePhotoIndex}
                       fallbackUrl={selectedCandidate.profileImagePath}
                       name={selectedCandidate.name}
+                      onZoom={(src) => setZoomImage(src)} // 🔥 Drawer ichidan zoom qilish
                     />
 
                     <div className="flex flex-col items-center text-center">
@@ -652,18 +670,12 @@ export default function Candidates() {
 
                       <div className="flex flex-wrap justify-center gap-3 mt-4">
                         {selectedCandidate.phone && (
-                          <a
-                            href={`tel:${selectedCandidate.phone}`}
-                            className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-full text-sm font-medium text-gray-700 hover:bg-gray-200 transition"
-                          >
+                          <a href={`tel:${selectedCandidate.phone}`} className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-full text-sm font-medium text-gray-700 hover:bg-gray-200 transition">
                             <Phone className="w-4 h-4" /> {selectedCandidate.phone}
                           </a>
                         )}
                         {selectedCandidate.email && (
-                          <a
-                            href={`mailto:${selectedCandidate.email}`}
-                            className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-full text-sm font-medium text-gray-700 hover:bg-gray-200 transition"
-                          >
+                          <a href={`mailto:${selectedCandidate.email}`} className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-full text-sm font-medium text-gray-700 hover:bg-gray-200 transition">
                             <Mail className="w-4 h-4" /> E-Mail
                           </a>
                         )}
@@ -672,28 +684,20 @@ export default function Candidates() {
                   </div>
 
                   <hr className="border-gray-100" />
-
+                  
                   {/* Über mich & Motivation */}
                   {(selectedCandidate.aboutMe || selectedCandidate.motivation) && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       {selectedCandidate.aboutMe && (
                         <div className="space-y-3">
-                          <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
-                            Über mich
-                          </h4>
-                          <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-700">
-                            {selectedCandidate.aboutMe}
-                          </div>
+                          <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Über mich</h4>
+                          <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-700">{selectedCandidate.aboutMe}</div>
                         </div>
                       )}
                       {selectedCandidate.motivation && (
                         <div className="space-y-3">
-                          <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
-                            Motivation
-                          </h4>
-                          <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-700">
-                            {selectedCandidate.motivation}
-                          </div>
+                          <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Motivation</h4>
+                          <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-700">{selectedCandidate.motivation}</div>
                         </div>
                       )}
                     </div>
@@ -701,77 +705,42 @@ export default function Candidates() {
 
                   {/* Persönliche Daten & Verfügbarkeit */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Persönlich */}
                     <div className="space-y-4">
                       <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
                         <User className="w-4 h-4 text-indigo-500" /> Persönlich
                       </h4>
                       <div className="bg-gray-50 rounded-xl p-4 space-y-3 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Geburtsdatum:</span>
-                          <span className="font-medium">
-                            {formatDate(selectedCandidate.birthday)}
-                          </span>
+                            <span className="text-gray-500">Geburtsdatum:</span>
+                            <span className="font-medium">{formatDate(selectedCandidate.birthday)}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Geschlecht:</span>
-                          <span className="font-medium">
-                            {genderLabels[selectedCandidate.gender] || "—"}
-                          </span>
+                            <span className="text-gray-500">Geschlecht:</span>
+                            <span className="font-medium">{genderLabels[selectedCandidate.gender] || "—"}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Staatsangehörigkeit:</span>
-                          <span className="font-medium">
-                            {selectedCandidate.nationality || "—"}
-                          </span>
+                            <span className="text-gray-500">Staatsangehörigkeit:</span>
+                            <span className="font-medium">{selectedCandidate.nationality || "—"}</span>
                         </div>
                         <div className="flex justify-between">
-                          <span className="text-gray-500">Adresse:</span>
-                          <span className="font-medium text-right">
-                            {[
-                              selectedCandidate.street,
-                              selectedCandidate.zipCode,
-                              selectedCandidate.city,
-                              selectedCandidate.country,
-                            ]
-                              .filter(Boolean)
-                              .join(", ") || "—"}
-                          </span>
+                            <span className="text-gray-500">Adresse:</span>
+                            <span className="font-medium text-right">{[selectedCandidate.street, selectedCandidate.zipCode, selectedCandidate.city, selectedCandidate.country].filter(Boolean).join(", ") || "—"}</span>
                         </div>
                       </div>
                     </div>
-
                     {/* Verfügbarkeit */}
                     <div className="space-y-4">
-                      <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                       <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-indigo-500" /> Verfügbarkeit
                       </h4>
                       <div className="bg-gray-50 rounded-xl p-4 space-y-3 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Verfügbar ab:</span>
-                          <span className="font-medium text-green-600">
-                            {formatDate(selectedCandidate.availableFrom)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Verfügbar bis:</span>
-                          <span className="font-medium text-red-600">
-                            {formatDate(selectedCandidate.availableUntil)}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-500">Erwartetes Taschengeld:</span>
-                          <span className="font-bold text-gray-900">
-                            €
-                            {selectedCandidate.expectedPocketMoney || "0"}
-                          </span>
-                        </div>
-                        {selectedCandidate.desiredCountry && (
+                         <div className="flex justify-between"><span className="text-gray-500">Verfügbar ab:</span><span className="font-medium text-green-600">{formatDate(selectedCandidate.availableFrom)}</span></div>
+                         <div className="flex justify-between"><span className="text-gray-500">Verfügbar bis:</span><span className="font-medium text-red-600">{formatDate(selectedCandidate.availableUntil)}</span></div>
+                         <div className="flex justify-between"><span className="text-gray-500">Taschengeld:</span><span className="font-bold text-gray-900">€{selectedCandidate.expectedPocketMoney || "0"}</span></div>
+                         {selectedCandidate.desiredCountry && (
                           <div className="flex justify-between border-t border-gray-200 pt-2 mt-2">
                             <span className="text-gray-500">Ziel-Land:</span>
-                            <span className="font-medium text-indigo-600">
-                              {selectedCandidate.desiredCountry}
-                            </span>
+                            <span className="font-medium text-indigo-600">{selectedCandidate.desiredCountry}</span>
                           </div>
                         )}
                       </div>
@@ -786,18 +755,11 @@ export default function Candidates() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {selectedCandidate.languages?.length > 0 && (
                           <div className="space-y-3">
-                            <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
-                              Sprachen
-                            </h4>
+                            <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Sprachen</h4>
                             <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
                               {selectedCandidate.languages.map((lang) => (
-                                <div
-                                  key={lang.id}
-                                  className="flex items-center justify-between gap-3"
-                                >
-                                  <span className="font-medium text-gray-800">
-                                    {lang.language}
-                                  </span>
+                                <div key={lang.id} className="flex items-center justify-between gap-3">
+                                  <span className="font-medium text-gray-800">{lang.language}</span>
                                   <span className="text-xs px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 font-semibold">
                                     {languageLevelLabels[lang.level] || lang.level}
                                   </span>
@@ -807,67 +769,33 @@ export default function Candidates() {
                           </div>
                         )}
 
-                        {(selectedCandidate.drivingLicense ||
-                          selectedCandidate.smoker ||
-                          selectedCandidate.petFriendly) && (
-                            <div className="space-y-3">
-                              <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
-                                Zusätzliche Merkmale
-                              </h4>
+                        {(selectedCandidate.drivingLicense || selectedCandidate.smoker || selectedCandidate.petFriendly) && (
+                          <div className="space-y-3">
+                              <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Zusätzliche Merkmale</h4>
                               <div className="bg-gray-50 rounded-xl p-4 flex flex-wrap gap-2 text-sm">
-                                {selectedCandidate.drivingLicense && (
-                                  <Badge
-                                    icon={Car}
-                                    label="Führerschein vorhanden"
-                                    color="orange"
-                                  />
-                                )}
-                                {selectedCandidate.smoker && (
-                                  <Badge icon={Cigarette} label="Raucher" color="red" />
-                                )}
-                                {selectedCandidate.petFriendly && (
-                                  <Badge
-                                    icon={PawPrint}
-                                    label="Mag Tiere"
-                                    color="green"
-                                  />
-                                )}
+                                {selectedCandidate.drivingLicense && <Badge icon={Car} label="Führerschein vorhanden" color="orange" />}
+                                {selectedCandidate.smoker && <Badge icon={Cigarette} label="Raucher" color="red" />}
+                                {selectedCandidate.petFriendly && <Badge icon={PawPrint} label="Mag Tiere" color="green" />}
                               </div>
-                            </div>
-                          )}
+                          </div>
+                        )}
                       </div>
-                    )}
+                  )}
 
                   {/* Bildung */}
                   {selectedCandidate.educations?.length > 0 && (
                     <div>
-                      <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">
-                        Bildung
-                      </h4>
+                      <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">Bildung</h4>
                       <div className="space-y-4">
                         {[...(selectedCandidate.educations || [])]
-                          .sort(
-                            (a, b) =>
-                              (parseDate(b.startDate) || 0) -
-                              (parseDate(a.startDate) || 0)
-                          )
+                          .sort((a, b) => (parseDate(b.startDate) || 0) - (parseDate(a.startDate) || 0))
                           .map((edu) => (
-                            <div
-                              key={edu.id}
-                              className="bg-gray-50 rounded-xl p-4 text-sm space-y-1"
-                            >
-                              <div className="font-bold text-gray-900">
-                                {edu.schoolName || "Schule / Universität"}
-                              </div>
+                            <div key={edu.id} className="bg-gray-50 rounded-xl p-4 text-sm space-y-1">
+                              <div className="font-bold text-gray-900">{edu.schoolName || "Schule / Universität"}</div>
                               <div className="text-xs text-gray-500">
-                                {formatDate(edu.startDate)} —{" "}
-                                {edu.endDate ? formatDate(edu.endDate) : "Bis heute"}
+                                {formatDate(edu.startDate)} — {edu.endDate ? formatDate(edu.endDate) : "Bis heute"}
                               </div>
-                              {edu.description && (
-                                <p className="text-gray-700 mt-1">
-                                  {edu.description}
-                                </p>
-                              )}
+                              {edu.description && <p className="text-gray-700 mt-1">{edu.description}</p>}
                             </div>
                           ))}
                       </div>
@@ -882,29 +810,17 @@ export default function Candidates() {
                       </h4>
                       <div className="relative border-l-2 border-indigo-100 ml-2 space-y-6 pl-6 py-2">
                         {[...(selectedCandidate.experiences || [])]
-                          .sort(
-                            (a, b) =>
-                              (parseDate(b.startDate) || 0) -
-                              (parseDate(a.startDate) || 0)
-                          )
+                          .sort((a, b) => (parseDate(b.startDate) || 0) - (parseDate(a.startDate) || 0))
                           .map((exp) => (
                             <div key={exp.id} className="relative">
                               <span className="absolute -left-[31px] top-1 w-4 h-4 rounded-full bg-indigo-500 border-4 border-white"></span>
-                              <h5 className="font-bold text-gray-900">
-                                {exp.positionTitle || "Position"}
-                              </h5>
-                              <p className="text-sm text-indigo-600 mb-1">
-                                {exp.companyName || "Unternehmen"}
+                              <h5 className="font-bold text-gray-900">{exp.positionTitle || "Position"}</h5>
+                              <p className="text-sm text-indigo-600 mb-1">{exp.companyName || "Unternehmen"}
                               </p>
                               <p className="text-xs text-gray-400 mb-2">
-                                {formatDate(exp.startDate)} —{" "}
-                                {exp.endDate ? formatDate(exp.endDate) : "Bis heute"}
+                                {formatDate(exp.startDate)} — {exp.endDate ? formatDate(exp.endDate) : "Bis heute"}
                               </p>
-                              {exp.responsibilities && (
-                                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
-                                  {exp.responsibilities}
-                                </p>
-                              )}
+                              {exp.responsibilities && <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">{exp.responsibilities}</p>}
                             </div>
                           ))}
                       </div>
@@ -914,15 +830,10 @@ export default function Candidates() {
                   {/* Hobbys */}
                   {selectedCandidate.hobbies?.length > 0 && (
                     <div>
-                      <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">
-                        Hobbys & Interessen
-                      </h4>
+                      <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">Hobbys & Interessen</h4>
                       <div className="bg-gray-50 rounded-xl p-4 flex flex-wrap gap-2 text-sm">
                         {selectedCandidate.hobbies.map((hobby) => (
-                          <span
-                            key={hobby.id}
-                            className="px-3 py-1 rounded-full bg-white border border-gray-200 text-gray-700"
-                          >
+                          <span key={hobby.id} className="px-3 py-1 rounded-full bg-white border border-gray-200 text-gray-700">
                             {hobby.name}
                           </span>
                         ))}
@@ -930,40 +841,23 @@ export default function Candidates() {
                     </div>
                   )}
 
-                  {/* Zertifikate (Liste) */}
+                  {/* Zertifikate */}
                   {selectedCandidate.certificates?.length > 0 && (
                     <div>
-                      <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">
-                        Zertifikate
-                      </h4>
+                      <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3">Zertifikate</h4>
                       <div className="space-y-3">
                         {selectedCandidate.certificates.map((cert) => (
-                          <div
-                            key={cert.id}
-                            className="bg-gray-50 rounded-xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-sm"
-                          >
+                          <div key={cert.id} className="bg-gray-50 rounded-xl p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-sm">
                             <div>
-                              <div className="font-bold text-gray-900">
-                                {cert.title || "Zertifikat"}
-                              </div>
+                              <div className="font-bold text-gray-900">{cert.title || "Zertifikat"}</div>
                               <div className="text-xs text-gray-500">
                                 {cert.issuer && <span>{cert.issuer}</span>}
-                                {cert.date && (
-                                  <span className="ml-2">
-                                    ({formatDate(cert.date)})
-                                  </span>
-                                )}
+                                {cert.date && <span className="ml-2">({formatDate(cert.date)})</span>}
                               </div>
                             </div>
                             {cert.filePath && cert.filePath.trim() && (
-                              <a
-                                href={cert.filePath}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-2 px-3 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition text-xs"
-                              >
-                                <FileText className="w-4 h-4" />
-                                Zertifikat ansehen
+                              <a href={cert.filePath} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition text-xs">
+                                <FileText className="w-4 h-4" /> Zertifikat ansehen
                               </a>
                             )}
                           </div>
@@ -971,132 +865,45 @@ export default function Candidates() {
                       </div>
                     </div>
                   )}
-
-                  {/* DOKUMENTE (CV, Zertifikat, Diplom, Pass) */}
-                  {(
-                    selectedCandidate.cvFilePath ||
-                    selectedCandidate.certificateFilePath ||
-                    selectedCandidate.diplomaFilePath ||
-                    selectedCandidate.passportFilePath
-                  ) && (
+                  
+                  {/* Documents Section */}
+                   {(selectedCandidate.cvFilePath || selectedCandidate.certificateFilePath || selectedCandidate.diplomaFilePath || selectedCandidate.passportFilePath) && (
                       <div className="pt-6 space-y-4">
-                        <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
-                          Dokumente
-                        </h4>
-
+                        <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Dokumente</h4>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          {/* CV */}
-                          {selectedCandidate.cvFilePath && (
-                            <div className="border border-gray-200 rounded-2xl p-4 bg-gray-50 hover:bg-white hover:shadow-md transition flex flex-col gap-3">
-                              <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-xl bg-gray-900 text-white flex items-center justify-center">
-                                  <FileText className="w-5 h-5" />
-                                </div>
-                                <div>
-                                  <p className="text-sm font-semibold text-gray-900">
-                                    Lebenslauf (CV)
-                                  </p>
-                                  <p className="text-[11px] text-gray-500">
-                                    PDF-Dokument
-                                  </p>
-                                </div>
-                              </div>
-                              <a
-                                href={selectedCandidate.cvFilePath}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline self-start"
-                              >
-                                Ansehen →
-                              </a>
-                            </div>
-                          )}
-
-                          {/* Zertifikat (einzelne Datei) */}
-                          {selectedCandidate.certificateFilePath && (
-                            <div className="border border-gray-200 rounded-2xl p-4 bg-gray-50 hover:bg-white hover:shadow-md transition flex flex-col gap-3">
-                              <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center">
-                                  <Award className="w-5 h-5" />
-                                </div>
-                                <div>
-                                  <p className="text-sm font-semibold text-gray-900">
-                                    Zertifikat
-                                  </p>
-                                  <p className="text-[11px] text-gray-500">
-                                    Sprach- / Kurszertifikat
-                                  </p>
-                                </div>
-                              </div>
-                              <a
-                                href={selectedCandidate.certificateFilePath}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline self-start"
-                              >
-                                Ansehen →
-                              </a>
-                            </div>
-                          )}
-
-                          {/* Diplom / Zeugnis */}
-                          {selectedCandidate.diplomaFilePath && (
-                            <div className="border border-gray-200 rounded-2xl p-4 bg-gray-50 hover:bg-white hover:shadow-md transition flex flex-col gap-3">
-                              <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center">
-                                  <GraduationCap className="w-5 h-5" />
-                                </div>
-                                <div>
-                                  <p className="text-sm font-semibold text-gray-900">
-                                    Diplom / Zeugnis
-                                  </p>
-                                  <p className="text-[11px] text-gray-500">
-                                    Bildungsdokument
-                                  </p>
-                                </div>
-                              </div>
-                              <a
-                                href={selectedCandidate.diplomaFilePath}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline self-start"
-                              >
-                                Ansehen →
-                              </a>
-                            </div>
-                          )}
-
-                          {/* Reisepass */}
-                          {selectedCandidate.passportFilePath && (
-                            <div className="border border-gray-200 rounded-2xl p-4 bg-gray-50 hover:bg-white hover:shadow-md transition flex flex-col gap-3">
-                              <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center">
-                                  <IdCard className="w-5 h-5" />
-                                </div>
-                                <div>
-                                  <p className="text-sm font-semibold text-gray-900">
-                                    Reisepass
-                                  </p>
-                                  <p className="text-[11px] text-gray-500">
-                                    Reisepass-Scan
-                                  </p>
-                                </div>
-                              </div>
-                              <a
-                                href={selectedCandidate.passportFilePath}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline self-start"
-                              >
-                                Ansehen →
-                              </a>
-                            </div>
-                          )}
+                           {/* CV */}
+                           {selectedCandidate.cvFilePath && (
+                             <a href={selectedCandidate.cvFilePath} target="_blank" rel="noreferrer" className="border border-gray-200 rounded-2xl p-4 bg-gray-50 hover:bg-white hover:shadow-md transition flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-gray-900 text-white flex items-center justify-center"><FileText className="w-5 h-5" /></div>
+                                <div><p className="text-sm font-semibold text-gray-900">CV / Lebenslauf</p><p className="text-[11px] text-gray-500">PDF anzeigen</p></div>
+                             </a>
+                           )}
+                           {/* Certificate */}
+                           {selectedCandidate.certificateFilePath && (
+                             <a href={selectedCandidate.certificateFilePath} target="_blank" rel="noreferrer" className="border border-gray-200 rounded-2xl p-4 bg-gray-50 hover:bg-white hover:shadow-md transition flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center"><Award className="w-5 h-5" /></div>
+                                <div><p className="text-sm font-semibold text-gray-900">Zertifikat</p><p className="text-[11px] text-gray-500">Datei anzeigen</p></div>
+                             </a>
+                           )}
+                           {/* Diploma */}
+                           {selectedCandidate.diplomaFilePath && (
+                             <a href={selectedCandidate.diplomaFilePath} target="_blank" rel="noreferrer" className="border border-gray-200 rounded-2xl p-4 bg-gray-50 hover:bg-white hover:shadow-md transition flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center"><GraduationCap className="w-5 h-5" /></div>
+                                <div><p className="text-sm font-semibold text-gray-900">Diplom / Zeugnis</p><p className="text-[11px] text-gray-500">Datei anzeigen</p></div>
+                             </a>
+                           )}
+                           {/* Passport */}
+                           {selectedCandidate.passportFilePath && (
+                             <a href={selectedCandidate.passportFilePath} target="_blank" rel="noreferrer" className="border border-gray-200 rounded-2xl p-4 bg-gray-50 hover:bg-white hover:shadow-md transition flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center"><IdCard className="w-5 h-5" /></div>
+                                <div><p className="text-sm font-semibold text-gray-900">Reisepass</p><p className="text-[11px] text-gray-500">Scan anzeigen</p></div>
+                             </a>
+                           )}
                         </div>
                       </div>
-                    )}
+                   )}
 
-                  <div className="h-10"></div> {/* Bottom spacer */}
+                  <div className="h-10"></div>
                 </div>
               )}
             </>

@@ -11,10 +11,12 @@ import Applications from './pages/dashboard/Applications';
 import Candidates from './pages/dashboard/Candidates';
 import Calendar from './pages/dashboard/Calendar';
 import Settings from './pages/dashboard/Settings';
+import { ToastProvider } from "./components/shared/toast/ToastProvider";
 
 function App() {
   return (
-    <Routes>
+    <ToastProvider>
+      <Routes>
       <Route path="/" element={<Login />} />
       
       <Route element={<ProtectedRoute />}>
@@ -32,6 +34,8 @@ function App() {
 
       <Route path="*" element={<div className="p-8 text-center">404 - Sahifa topilmadi</div>} />
     </Routes>
+    </ToastProvider>
+    
   );
 }
 
