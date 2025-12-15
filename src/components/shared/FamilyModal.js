@@ -13,7 +13,7 @@ import {
    Users,
    MapPin,
    Clock,
-   DollarSign,
+   Euro,
    Car,
    Utensils,
    ToggleLeft,
@@ -462,7 +462,7 @@ export default function FamilyModal({ show, onClose, item, onSave }) {
                                  placeholder="30"
                               />
                               <Input
-                                 icon={DollarSign}
+                                 icon={Euro}
                                  type="number"
                                  label="Taschengeld (€)"
                                  value={formData.pocketMoney}

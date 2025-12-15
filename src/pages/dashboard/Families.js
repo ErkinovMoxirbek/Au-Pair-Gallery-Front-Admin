@@ -11,14 +11,12 @@ import {
   Edit,
   Trash2,
   User,
-  DollarSign,
+  Euro,
   Clock,
   Car,
   Utensils,
   Briefcase,
   Baby,
-  List,
-  Grid,
   RefreshCcw,
 } from "lucide-react";
 
@@ -495,7 +493,7 @@ function FamilyDetailDrawer({ show, onClose, family, onEdit, onDelete }) {
                   value={`${family.workingHoursPerWeek || "-"} Stunden`}
                 />
                 <DetailItem
-                  icon={DollarSign}
+                  icon={Euro}
                   label="Taschengeld"
                   value={
                     family.pocketMoney !== null &&
