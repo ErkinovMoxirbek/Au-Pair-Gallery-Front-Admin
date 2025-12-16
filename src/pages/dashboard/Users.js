@@ -1,45 +1,96 @@
-// src/pages/dashboard/Users.js - FIXED VERSION (Admin-Schutz + Deutsche Texte)
-import { useState, useEffect } from 'react';
-import { Search, Plus, Edit, Trash2, Download, UserPlus } from 'lucide-react';
+// src/pages/dashboard/Users.js
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import {
+  Search,
+  Plus,
+  Edit2,
+  Trash2,
+  Download,
+  Filter,
+  RefreshCw,
+  Send,
+  ShieldAlert,
+  CheckCircle2,
+  Lock,
+} from 'lucide-react';
+import { toast } from 'react-hot-toast';
+
 import dashboardService from '../../services/dashboardService';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
 import Modal from '../../components/shared/UserModal';
 
-// Rollen-Bezeichnungen
-const roleLabels = {
-  'ROLE_ADMIN': 'Admin',
-  'ROLE_SHEFF': 'Admin',
-  'ROLE_AUPAIR': 'Kandidat',
-  'ROLE_FAMILY': 'Familie',
+// --- CONFIGURATION & HELPERS ---
+
+const STATUS_CONFIG = {
+  ALL: { label: 'Alle', color: 'bg-gray-100 text-gray-700' },
+  PENDING: {
+    label: 'Wartet auf Genehmigung',
+    color: 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-600/20',
+  },
+  APPROVED: {
+    label: 'Genehmigt',
+    color: 'bg-blue-50 text-blue-700 ring-1 ring-blue-700/10',
+  },
+  ACTIVE: {
+    label: 'Aktiv',
+    color: 'bg-green-50 text-green-700 ring-1 ring-green-600/20',
+  },
+  NOACTIVE: {
+    label: 'Inaktiv',
+    color: 'bg-gray-100 text-gray-600 ring-1 ring-gray-500/10',
+  },
+  EXPIRED: {
+    label: 'Abgelaufen',
+    color: 'bg-orange-50 text-orange-700 ring-1 ring-orange-600/20',
+  },
+  REJECTED: {
+    label: 'Abgelehnt',
+    color: 'bg-red-50 text-red-700 ring-1 ring-red-600/10',
+  },
+  SUSPENDED: {
+    label: 'Gesperrt',
+    color: 'bg-red-50 text-red-700 ring-1 ring-red-600/10',
+  },
 };
 
-// Status-Bezeichnungen
-const statusLabels = {
-  ACTIVE: 'Aktiv',
-  NOACTIVE: 'Inaktiv',
-  INACTIVE: 'In Bearbeitung',
+const ROLE_LABELS = {
+  ROLE_ADMIN: 'Admin',
+  ROLE_SHEFF: 'Leitung',
+  ROLE_AUPAIR: 'Kandidat (Au Pair)',
+  ROLE_FAMILY: 'Familie',
+  ADMIN: 'Admin',
+  SHEFF: 'Leitung',
+  AUPAIR: 'Kandidat (Au Pair)',
+  FAMILY: 'Familie',
 };
 
-// Helper: Prüfen, ob Benutzer Admin ist
 const isAdminUser = (user) => {
   if (!user || !Array.isArray(user.roles)) return false;
-  return user.roles.includes('ROLE_ADMIN') || user.roles.includes('ROLE_SHEFF');
+  const adminRoles = ['ROLE_ADMIN', 'ROLE_SHEFF', 'ADMIN', 'SHEFF'];
+  return user.roles.some((r) => adminRoles.includes(r));
+};
+
+const getInitials = (name, surname) => {
+  return `${(name?.[0] || '').toUpperCase()}${(surname?.[0] || '').toUpperCase()}`;
 };
 
 export default function Users() {
+  // --- STATE ---
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState(null); // ID of user being processed
+
+  // Filters
   const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('ALL'); // Replaces filterStatus dropdown
   const [filterRole, setFilterRole] = useState('all');
+
+  // Modal
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
-
-  const loadUsers = async () => {
+  // --- DATA LOADING ---
+  const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
       const res = await dashboardService.getUsers();
@@ -51,73 +102,77 @@ export default function Users() {
       setUsers(list);
     } catch (error) {
       console.error('Error loading users:', error);
-      alert('Fehler beim Laden der Benutzer: ' + error.message);
+      toast.error('Fehler beim Laden der Benutzer');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
+
+  // --- ACTIONS ---
   const handleSave = async (userData) => {
-    // Admin-Rolle bei neuem Benutzer verbieten
-    const rawRoles = Array.isArray(userData.roles)
-      ? userData.roles
-      : userData.role
-      ? [userData.role]
-      : [];
-
-    const hasAdminRole =
-      rawRoles.includes('ROLE_ADMIN') || rawRoles.includes('ROLE_SHEFF');
-
-    // Neuer Benutzer mit Admin-Rolle ist nicht erlaubt
-    if (!editingUser && hasAdminRole) {
-      alert('Das Anlegen eines Benutzers mit Admin-Rolle ist nicht erlaubt.');
-      throw new Error('Admin creation not allowed');
-    }
-
-    // Bearbeiten eines Admin-Benutzers verbieten
-    if (editingUser && isAdminUser(editingUser)) {
-      alert('Das Bearbeiten eines Admin-Benutzers ist nicht erlaubt.');
-      throw new Error('Admin edit not allowed');
-    }
-
     try {
       if (editingUser) {
         await dashboardService.updateUser(editingUser.id, userData);
+        toast.success('Daten wurden aktualisiert');
       } else {
-        await dashboardService.createUser(userData);
+        const res = await dashboardService.createUser(userData);
+        if (res?.data?.status === 'PENDING') {
+          toast.success('Erstellt! Sie können den Benutzer jetzt genehmigen.', { icon: '⏳' });
+        } else {
+          toast.success('Benutzer erfolgreich erstellt');
+        }
       }
-      await loadUsers();
       closeModal();
+      loadUsers();
     } catch (error) {
-      console.error('Save error:', error);
-      throw error;
+      toast.error(error?.response?.data?.message || 'Es ist ein Fehler aufgetreten');
     }
   };
 
   const handleDelete = async (id) => {
-    const userToDelete = users.find((u) => u.id === id);
-
-    // Admin darf nicht gelöscht werden
-    if (userToDelete && isAdminUser(userToDelete)) {
-      alert('Das Löschen eines Admin-Benutzers ist nicht erlaubt.');
-      return;
+    if (!window.confirm('Möchten Sie diesen Benutzer wirklich löschen?')) return;
+    try {
+      await dashboardService.deleteUser(id);
+      toast.success('Gelöscht');
+      loadUsers();
+    } catch (error) {
+      toast.error('Fehler beim Löschen');
     }
+  };
 
-    if (window.confirm('Möchten Sie diesen Benutzer wirklich löschen?')) {
-      try {
-        await dashboardService.deleteUser(id);
-        await loadUsers();
-      } catch (error) {
-        console.error('Delete error:', error);
-        alert('Fehler beim Löschen: ' + error.message);
-      }
+  const handleApprove = async (userId) => {
+    if (!window.confirm('Möchten Sie den Benutzer für 3 Monate genehmigen?')) return;
+    setProcessingId(userId);
+    try {
+      await dashboardService.approveUser(userId, 3);
+      toast.success('Genehmigt und E-Mail wurde gesendet');
+      loadUsers();
+    } catch (error) {
+      toast.error('Fehler bei der Genehmigung');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleResendEmail = async (userId) => {
+    setProcessingId(userId);
+    try {
+      await dashboardService.resendActivationEmail(userId);
+      toast.success('E-Mail wurde erneut gesendet');
+    } catch (error) {
+      toast.error('Es ist ein Fehler aufgetreten');
+    } finally {
+      setProcessingId(null);
     }
   };
 
   const openModal = (user = null) => {
-    // Modal für Admin-User nicht öffnen
     if (user && isAdminUser(user)) {
-      alert('Das Bearbeiten eines Admin-Benutzers ist nicht erlaubt.');
+      toast.error('Ein Benutzer mit Admin-Rechten kann nicht bearbeitet werden.');
       return;
     }
     setEditingUser(user);
@@ -129,319 +184,324 @@ export default function Users() {
     setEditingUser(null);
   };
 
-  const handleSort = (key) => {
-    let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
+  // --- FILTERING LOGIC ---
+  const filteredUsers = useMemo(() => {
+    return users.filter((user) => {
+      // 1. Search
+      const search = searchTerm.toLowerCase();
+      const matchesSearch =
+        (user.name || '').toLowerCase().includes(search) ||
+        (user.surname || '').toLowerCase().includes(search) ||
+        (user.email || '').toLowerCase().includes(search);
+
+      // 2. Tab Filter (Status)
+      const matchesStatus = activeTab === 'ALL' || user.status === activeTab;
+
+      // 3. Role Filter
+      let matchesRole = true;
+      if (filterRole !== 'all') {
+        if (filterRole === 'ADMIN') {
+          matchesRole = isAdminUser(user);
+        } else {
+          matchesRole = user.roles?.some((r) => r === filterRole || r === `ROLE_${filterRole}`);
+        }
+      }
+
+      return matchesSearch && matchesStatus && matchesRole;
+    });
+  }, [users, searchTerm, activeTab, filterRole]);
+
+  // Derived Stats
+  const stats = useMemo(
+    () => ({
+      total: users.length,
+      pending: users.filter((u) => u.status === 'PENDING').length,
+      approved: users.filter((u) => u.status === 'APPROVED').length,
+    }),
+    [users]
+  );
+
+  // Export CSV
+  const exportCSV = () => {
+    const header = ['Vorname', 'Nachname', 'E-Mail', 'Rolle', 'Status'];
+    const rows = filteredUsers.map((u) => [u.name, u.surname, u.email, (u.roles || []).join(', '), u.status]);
+    const csvContent = [header, ...rows].map((e) => e.join(',')).join('\n');
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }));
+    link.download = 'users_export.csv';
+    link.click();
   };
-
-  const exportToCSV = () => {
-    const headers = ['Name', 'E-Mail', 'Rollen', 'Status'];
-    const rows = filteredUsers.map((user) => [
-      `${user.name ?? ''} ${user.surname ?? ''}`.trim(),
-      user.email,
-      Array.isArray(user.roles)
-        ? user.roles.map((r) => roleLabels[r] || r).join(', ')
-        : '',
-      statusLabels[user.status] || user.status,
-    ]);
-
-    const csv = [
-      headers.join(','),
-      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(',')),
-    ].join('\n');
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'benutzer.csv';
-    a.click();
-    window.URL.revokeObjectURL(url);
-  };
-
-  // Benutzer filtern
-  const filteredUsers = users.filter((user) => {
-    const matchesSearch =
-      user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.surname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesRole =
-      filterRole === 'all' ||
-      (Array.isArray(user.roles) && user.roles.includes(filterRole));
-
-    return matchesSearch && matchesRole;
-  });
-
-  // Benutzer sortieren
-  const sortedUsers = [...filteredUsers].sort((a, b) => {
-    if (!sortConfig.key) return 0;
-
-    const aValue = a[sortConfig.key];
-    const bValue = b[sortConfig.key];
-
-    if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-    if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-    return 0;
-  });
 
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="min-h-screen bg-gray-50/50 p-6 space-y-6">
+      {/* --- HEADER SECTION --- */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Benutzer</h1>
-          <p className="text-gray-600 mt-1">
-            Insgesamt {filteredUsers.length} Benutzer
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Benutzer</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Insgesamt {stats.total} Benutzer, davon warten {stats.pending} auf Genehmigung.
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
           <button
-            onClick={exportToCSV}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            onClick={exportCSV}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
           >
             <Download className="w-4 h-4" />
-            <span className="hidden sm:inline">Exportieren</span>
+            Export
           </button>
-          {/* Hinzufügen-Button bleibt, Admin-Erstellung wird in handleSave blockiert */}
           <button
             onClick={() => openModal()}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 active:bg-blue-800 transition-all shadow-sm shadow-blue-200"
           >
-            <Plus className="w-5 h-5" />
-            <span>Benutzer hinzufügen</span>
+            <Plus className="w-4 h-4" />
+            Neu hinzufügen
           </button>
         </div>
       </div>
 
-      {/* Such- & Filter-Leiste */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+      {/* --- FILTERS & TABS CARD --- */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+        {/* Top: Status Tabs */}
+        <div className="border-b border-gray-100 overflow-x-auto">
+          <div className="flex items-center px-2">
+            {[
+              { id: 'ALL', label: 'Alle' },
+              { id: 'PENDING', label: 'Wartet', count: stats.pending, color: 'text-yellow-600 bg-yellow-50' },
+              { id: 'APPROVED', label: 'Genehmigt', count: stats.approved, color: 'text-blue-600 bg-blue-50' },
+              { id: 'ACTIVE', label: 'Aktive' },
+              { id: 'NOACTIVE', label: 'Inaktive' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`
+                  relative px-4 py-4 text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2
+                  ${activeTab === tab.id ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}
+                `}
+              >
+                {tab.label}
+                {tab.count > 0 && (
+                  <span className={`px-2 py-0.5 rounded-full text-xs ${tab.color}`}>
+                    {tab.count}
+                  </span>
+                )}
+                {activeTab === tab.id && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full" />
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Bottom: Search & Role Filter */}
+        <div className="p-4 flex flex-col sm:flex-row gap-4 justify-between items-center bg-gray-50/30">
+          <div className="relative w-full sm:max-w-md">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-gray-400" />
+            </div>
             <input
               type="text"
-              placeholder="Nach Name oder E-Mail suchen..."
+              placeholder="Suche nach Name oder E-Mail..."
+              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-          <div className="flex gap-3">
+
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <Filter className="w-4 h-4 text-gray-400 hidden sm:block" />
             <select
               value={filterRole}
               onChange={(e) => setFilterRole(e.target.value)}
-              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg bg-white"
             >
               <option value="all">Alle Rollen</option>
-              <option value="ROLE_ADMIN">Admin</option>
-              <option value="ROLE_AUPAIR">Kandidat</option>
-              <option value="ROLE_FAMILY">Familie</option>
+              <option value="ADMIN">Admins</option>
+              <option value="FAMILY">Familien</option>
+              <option value="AUPAIR">Kandidaten</option>
             </select>
           </div>
         </div>
-
-        {/* Aktive Filter */}
-        {(searchTerm || filterRole !== 'all') && (
-          <div className="mt-3 flex items-center gap-2 flex-wrap">
-            <span className="text-sm text-gray-600">Aktive Filter:</span>
-            {searchTerm && (
-              <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 text-sm rounded-full">
-                Suche: {searchTerm}
-                <button
-                  onClick={() => setSearchTerm('')}
-                  className="hover:text-blue-900"
-                >
-                  ×
-                </button>
-              </span>
-            )}
-            {filterRole !== 'all' && (
-              <span className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 text-sm rounded-full">
-                Rolle: {roleLabels[filterRole] || filterRole}
-                <button
-                  onClick={() => setFilterRole('all')}
-                  className="hover:text-blue-900"
-                >
-                  ×
-                </button>
-              </span>
-            )}
-            <button
-              onClick={() => {
-                setSearchTerm('');
-                setFilterRole('all');
-              }}
-              className="text-sm text-blue-600 hover:text-blue-700"
-            >
-              Alle Filter zurücksetzen
-            </button>
-          </div>
-        )}
       </div>
 
-      {/* Benutzer-Tabelle */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {/* --- TABLE SECTION --- */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
               <tr>
-                <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleSort('name')}
-                >
-                  <div className="flex items-center gap-2">
-                    NAME
-                    {sortConfig.key === 'name' && (
-                      <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Benutzer
                 </th>
-                <th
-                  className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
-                  onClick={() => handleSort('email')}
-                >
-                  <div className="flex items-center gap-2">
-                    E-MAIL
-                    {sortConfig.key === 'email' && (
-                      <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </div>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Rolle
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                  ROLLEN
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-600 uppercase tracking-wider">
-                  STATUS
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  Registriert am
                 </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-600 uppercase tracking-wider">
-                  AKTIONEN
+                <th className="relative px-6 py-3">
+                  <span className="sr-only">Aktionen</span>
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
-              {sortedUsers.length === 0 ? (
+
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-12 text-center">
-                    <UserPlus className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-500 font-medium">
-                      Keine Benutzer gefunden
-                    </p>
-                    <p className="text-gray-400 text-sm mt-1">
-                      {searchTerm || filterRole !== 'all'
-                        ? 'Passen Sie die Filter an oder setzen Sie sie zurück.'
-                        : 'Fügen Sie einen neuen Benutzer hinzu.'}
-                    </p>
+                  <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                        <Search className="w-6 h-6 text-gray-400" />
+                      </div>
+                      <p className="text-base font-medium text-gray-900">Keine Treffer</p>
+                      <p className="text-sm mt-1">
+                        Ändern Sie den Suchbegriff oder setzen Sie die Filter zurück.
+                      </p>
+                      <button
+                        onClick={() => {
+                          setSearchTerm('');
+                          setFilterRole('all');
+                          setActiveTab('ALL');
+                        }}
+                        className="mt-4 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                      >
+                        Filter zurücksetzen
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ) : (
-                sortedUsers.map((user) => {
-                  const admin = isAdminUser(user);
+                filteredUsers.map((user) => {
+                  const isAdmin = isAdminUser(user);
+                  const statusInfo = STATUS_CONFIG[user.status] || STATUS_CONFIG.NOACTIVE;
+                  const isProcessing = processingId === user.id;
+
                   return (
-                    <tr
-                      key={user.id}
-                      className="hover:bg-gray-50 transition-colors"
-                    >
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
-                            <span className="text-white font-semibold text-sm">
-                              {user.name?.charAt(0)?.toUpperCase() || 'U'}
-                              {user.surname?.charAt(0)?.toUpperCase() || 'U'}
-                            </span>
+                    <tr key={user.id} className="group hover:bg-gray-50/80 transition-colors">
+                      {/* Name & Avatar */}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className="flex-shrink-0 h-10 w-10">
+                            <div
+                              className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-sm ${
+                                isAdmin
+                                  ? 'bg-gradient-to-br from-purple-600 to-indigo-600'
+                                  : 'bg-gradient-to-br from-blue-500 to-cyan-500'
+                              }`}
+                            >
+                              {getInitials(user.name, user.surname)}
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-medium text-gray-900">
-                              {user.name || 'Unbekannt'}{' '}
-                              {user.surname || 'Unbekannt'}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              ID: {user.id}
-                            </p>
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-gray-900 flex items-center gap-1">
+                              {user.name} {user.surname}
+                              {isAdmin && (
+                                <ShieldAlert className="w-3.5 h-3.5 text-indigo-500" title="Admin" />
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-500">{user.email}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <p className="text-gray-700">{user.email}</p>
-                      </td>
-                      <td className="px-6 py-4">
+
+                      {/* Role */}
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex flex-wrap gap-1">
-                          {Array.isArray(user.roles) && user.roles.length > 0 ? (
-                            user.roles.map((role, i) => (
-                              <span
-                                key={i}
-                                className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                  role === 'ROLE_ADMIN' || role === 'ROLE_SHEFF'
-                                    ? 'bg-purple-100 text-purple-700'
-                                    : role === 'ROLE_AUPAIR'
-                                    ? 'bg-blue-100 text-blue-700'
-                                    : role === 'ROLE_FAMILY'
-                                    ? 'bg-green-100 text-green-700'
-                                    : 'bg-gray-100 text-gray-700'
-                                }`}
-                              >
-                                {roleLabels[role] || role}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="text-gray-400 text-xs">
-                              Keine Rolle
+                          {(user.roles || []).map((role, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200"
+                            >
+                              {ROLE_LABELS[role] || role}
                             </span>
-                          )}
+                          ))}
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+
+                      {/* Status */}
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <span
-                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                            user.status === 'ACTIVE'
-                              ? 'bg-green-100 text-green-700'
-                              : user.status === 'NOACTIVE'
-                              ? 'bg-red-100 text-red-700'
-                              : 'bg-orange-100 text-orange-700'
-                          }`}
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}
                         >
-                          {statusLabels[user.status] || user.status}
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                              user.status === 'ACTIVE' ? 'bg-green-500' : 'bg-current opacity-60'
+                            }`}
+                          ></span>
+                          {statusInfo.label}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => openModal(user)}
-                            className={`p-2 rounded-lg transition-colors ${
-                              admin
-                                ? 'text-gray-300 cursor-not-allowed'
-                                : 'text-blue-600 hover:bg-blue-50'
-                            }`}
-                            title={
-                              admin
-                                ? 'Admin-Benutzer können nicht bearbeitet werden.'
-                                : 'Bearbeiten'
-                            }
-                            disabled={admin}
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(user.id)}
-                            className={`p-2 rounded-lg transition-colors ${
-                              admin
-                                ? 'text-gray-300 cursor-not-allowed'
-                                : 'text-red-600 hover:bg-red-50'
-                            }`}
-                            title={
-                              admin
-                                ? 'Admin-Benutzer können nicht gelöscht werden.'
-                                : 'Löschen'
-                            }
-                            disabled={admin}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+
+                      {/* Date (Mocked or Real if available) */}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {/* Falls Backend Datum liefert: {new Date(user.createdAt).toLocaleDateString()} */}
+                        <span className="text-gray-400">-</span>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
+                          {/* 1. APPROVE ACTION */}
+                          {user.status === 'PENDING' && (
+                            <button
+                              onClick={() => handleApprove(user.id)}
+                              disabled={isProcessing || isAdmin}
+                              className="text-green-600 hover:bg-green-50 p-1.5 rounded-lg border border-transparent hover:border-green-200 transition-all"
+                              title="Genehmigen"
+                            >
+                              {isProcessing ? (
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
+
+                          {/* 2. RESEND EMAIL */}
+                          {user.status === 'APPROVED' && (
+                            <button
+                              onClick={() => handleResendEmail(user.id)}
+                              disabled={isProcessing || isAdmin}
+                              className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg border border-transparent hover:border-blue-200 transition-all"
+                              title="E-Mail erneut senden"
+                            >
+                              {isProcessing ? (
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Send className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
+
+                          {/* 3. EDIT & DELETE */}
+                          {isAdmin ? (
+                            <div className="p-1.5 text-gray-300 cursor-not-allowed" title="Admin kann nicht bearbeitet werden">
+                              <Lock className="w-4 h-4" />
+                            </div>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => openModal(user)}
+                                className="text-gray-500 hover:text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg transition-colors"
+                                title="Bearbeiten"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(user.id)}
+                                className="text-gray-500 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-colors"
+                                title="Löschen"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -452,18 +512,13 @@ export default function Users() {
           </table>
         </div>
 
-        {/* Tabellen-Fußzeile */}
-        {sortedUsers.length > 0 && (
-          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-600">
-                Insgesamt{' '}
-                <span className="font-medium">{sortedUsers.length}</span>{' '}
-                Ergebnis(se)
-              </p>
-            </div>
-          </div>
-        )}
+        {/* Footer Stats */}
+        <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-between items-center">
+          <span className="text-xs text-gray-500 uppercase tracking-wide font-semibold">
+            Gesamt: {filteredUsers.length} Ergebnis(se)
+          </span>
+          {/* Pagination buttons here if backend supports */}
+        </div>
       </div>
 
       {/* Modal */}

@@ -1,6 +1,5 @@
-// src/components/shared/UserModal.js
 import { useState, useEffect } from 'react';
-import { X, Save, Calendar, Clock } from 'lucide-react';
+import { X, Save, Calendar, Clock, AlertCircle } from 'lucide-react';
 
 const ROLE_OPTIONS = [
   { value: 'ROLE_AUPAIR', label: 'Kandidat' },
@@ -19,7 +18,6 @@ export default function UserModal({ show, onClose, item, onSave }) {
     age: '',
     role: '',
     isActive: true,
-    // LocalDateTime fields (ISO: YYYY-MM-DDThh:mm)
     validFrom: '',
     validUntil: ''
   });
@@ -30,16 +28,19 @@ export default function UserModal({ show, onClose, item, onSave }) {
   const showValidityPeriod =
     formData.role === 'ROLE_FAMILY' || formData.role === 'ROLE_AUPAIR';
 
-  // Modal ochilganda formani to‘ldirish / reset qilish
+  // EDIT mode check
+  const isEditMode = !!item;
+
   useEffect(() => {
     if (!show) return;
 
     if (item) {
+      // EDIT MODE
       setFormData({
         name: item.name || '',
         surname: item.surname || '',
         email: item.email || '',
-        password: '', // tahrirlashda passwordni qayta ko‘rsatmaymiz
+        password: '',
         phone: item.phone || '',
         country: item.country || '',
         city: item.city || '',
@@ -52,6 +53,7 @@ export default function UserModal({ show, onClose, item, onSave }) {
         validUntil: item.validUntil ? item.validUntil.slice(0, 16) : ''
       });
     } else {
+      // CREATE MODE
       setFormData({
         name: '',
         surname: '',
@@ -86,13 +88,14 @@ export default function UserModal({ show, onClose, item, onSave }) {
     else if (!/\S+@\S+\.\S+/.test(formData.email))
       newErrors.email = 'Das E-Mail-Format ist ungültig.';
 
-    // Parol endi majburiy emas – faqat kiritilsa tekshiramiz
-    if (formData.password && formData.password.length < 6) {
+    // Password validation (only if provided in edit mode)
+    if (isEditMode && formData.password && formData.password.length < 6) {
       newErrors.password = 'Das Passwort muss mindestens 6 Zeichen lang sein.';
     }
 
     if (!formData.role) newErrors.role = 'Bitte wählen Sie eine Rolle aus.';
 
+    // Validity period required for FAMILY/AUPAIR
     if (showValidityPeriod) {
       if (!formData.validFrom) {
         newErrors.validFrom = 'Startzeitpunkt ist erforderlich.';
@@ -127,20 +130,19 @@ export default function UserModal({ show, onClose, item, onSave }) {
         city: formData.city?.trim() || null,
         age: formData.age?.trim() || null,
         status: formData.isActive ? 'ACTIVE' : 'NOACTIVE',
-        // validFrom/validUntil faqat kerak bo'lsa qoladi
         validFrom: showValidityPeriod ? formData.validFrom || null : null,
         validUntil: showValidityPeriod ? formData.validUntil || null : null
       };
 
-      // role -> roles / role
+      // Role handling
       if (item && Array.isArray(item.roles)) {
         dataToSend.roles = formData.role ? [formData.role] : [];
       } else {
         dataToSend.role = formData.role;
       }
 
-      // password faqat kiritilganda yuboriladi
-      if (formData.password) {
+      // Password only if provided (edit mode only)
+      if (isEditMode && formData.password) {
         dataToSend.password = formData.password;
       }
 
@@ -148,7 +150,7 @@ export default function UserModal({ show, onClose, item, onSave }) {
       onClose();
     } catch (error) {
       console.error('Save error:', error);
-      alert('Fehler: ' + (error.response?.data?.message || error.message));
+      // Error handled in parent component
     } finally {
       setLoading(false);
     }
@@ -168,7 +170,7 @@ export default function UserModal({ show, onClose, item, onSave }) {
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
           <h3 className="text-xl font-semibold text-gray-900">
-            {item ? 'Bearbeiten – Benutzer' : 'Neuer Benutzer hinzufügen'}
+            {isEditMode ? 'Bearbeiten – Benutzer' : 'Neuer Benutzer hinzufügen'}
           </h3>
           <button
             onClick={onClose}
@@ -178,6 +180,24 @@ export default function UserModal({ show, onClose, item, onSave }) {
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Info Banner for new users */}
+        {!isEditMode && (
+          <div className="mx-6 mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex gap-3">
+              <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-blue-800">
+                <p className="font-semibold mb-1">Hinweis zur Benutzerregistrierung</p>
+                <p>
+                  Für <strong>Kandidaten</strong> und <strong>Familien</strong>: 
+                  Der Benutzer wird mit Status <strong>"Wartet auf Genehmigung"</strong> erstellt. 
+                  Nach der Genehmigung erhält der Benutzer eine E-Mail mit einem Aktivierungslink, 
+                  um sein Passwort selbst festzulegen.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
@@ -238,8 +258,8 @@ export default function UserModal({ show, onClose, item, onSave }) {
                 )}
               </div>
 
-              {/* Passwort faqat EDIT rejimida */}
-              {item && (
+              {/* Password - ONLY in EDIT mode */}
+              {isEditMode && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Passwort{' '}
@@ -260,10 +280,13 @@ export default function UserModal({ show, onClose, item, onSave }) {
                       {errors.password}
                     </p>
                   )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    Lassen Sie dieses Feld leer, um das aktuelle Passwort beizubehalten.
+                  </p>
                 </div>
               )}
 
-              {/* Rolle */}
+              {/* Role */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Rolle <span className="text-red-500">*</span>
@@ -288,7 +311,7 @@ export default function UserModal({ show, onClose, item, onSave }) {
                 )}
               </div>
 
-              {/* Gültigkeitszeitraum (ROLE_AUPAIR / ROLE_FAMILY) */}
+              {/* Validity Period - Required for FAMILY/AUPAIR */}
               {showValidityPeriod && (
                 <div className="md:col-span-2 p-4 bg-amber-50 rounded-lg border border-amber-200 space-y-3">
                   <p className="text-sm font-semibold text-amber-800 flex items-center gap-1">
@@ -346,26 +369,32 @@ export default function UserModal({ show, onClose, item, onSave }) {
                       )}
                     </div>
                   </div>
+                  <p className="text-xs text-gray-600 flex items-start gap-1">
+                    <AlertCircle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                    Der Benutzer erhält Zugriff auf die Plattform während dieses Zeitraums.
+                  </p>
                 </div>
               )}
 
-              {/* Status */}
-              <div className="flex items-center gap-3 md:col-span-2">
-                <input
-                  id="isActive"
-                  name="isActive"
-                  type="checkbox"
-                  checked={formData.isActive}
-                  onChange={handleChange}
-                  className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <label
-                  htmlFor="isActive"
-                  className="text-sm text-gray-700 select-none"
-                >
-                  Status: {formData.isActive ? 'AKTIV' : 'INAKTIV'}
-                </label>
-              </div>
+              {/* Status - Only in EDIT mode */}
+              {isEditMode && (
+                <div className="flex items-center gap-3 md:col-span-2">
+                  <input
+                    id="isActive"
+                    name="isActive"
+                    type="checkbox"
+                    checked={formData.isActive}
+                    onChange={handleChange}
+                    className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <label
+                    htmlFor="isActive"
+                    className="text-sm text-gray-700 select-none"
+                  >
+                    Status: {formData.isActive ? 'AKTIV' : 'INAKTIV'}
+                  </label>
+                </div>
+              )}
             </div>
           </div>
 
@@ -375,7 +404,7 @@ export default function UserModal({ show, onClose, item, onSave }) {
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50"
             >
               Abbrechen
             </button>
@@ -392,7 +421,7 @@ export default function UserModal({ show, onClose, item, onSave }) {
               ) : (
                 <>
                   <Save className="w-5 h-5" />
-                  <span>Speichern</span>
+                  <span>{isEditMode ? 'Speichern' : 'Erstellen'}</span>
                 </>
               )}
             </button>

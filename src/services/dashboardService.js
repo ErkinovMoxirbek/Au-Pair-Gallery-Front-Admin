@@ -66,22 +66,10 @@ const dashboardService = {
   deleteCandidate: (id) =>
     axios.delete(`${API_URL}/candidates/${id}`).then(res => res.data),
 
-  // ======================
-  // CANDIDATE PHOTOS (MULTI)
-  // ======================
-
-  /**
-   * Kandidat fotosuratlarini olish (backenddagi /{id}/photos GET)
-   * Array<CandidatePhotoResponse> qaytadi
-   */
+  
   getCandidatePhotos: (id) =>
     axios.get(`${API_URL}/candidates/${id}/photos`).then(res => res.data),
 
-  /**
-   * Bir nechta fotosurat yuklash:
-   * files: File[]
-   * Backend: @PostMapping("/{id}/photos") @RequestParam("files") List<MultipartFile> files
-   */
   uploadCandidatePhotos: (id, files = []) => {
     const form = new FormData();
     (files || []).forEach((file) => {
@@ -95,25 +83,15 @@ const dashboardService = {
     }).then(res => res.data);
   },
 
-  /**
-   * Asosiy (main) rasmni o‘rnatish
-   */
   setCandidateMainPhoto: (id, photoId) =>
     axios
       .patch(`${API_URL}/candidates/${id}/photos/${photoId}/main`)
       .then(res => res.data),
 
-  /**
-   * Bitta rasmni o‘chirish
-   */
   deleteCandidatePhoto: (id, photoId) =>
     axios
       .delete(`${API_URL}/candidates/${id}/photos/${photoId}`)
       .then(res => res.data),
-
-  // ======================
-  // FILE UPLOADS (CV, CERTIFICATE, DIPLOMA, PASSPORT)
-  // ======================
 
   uploadCandidateCv: (id, file) => {
     const form = new FormData();
@@ -153,8 +131,6 @@ const dashboardService = {
       .post(`${API_URL}/candidates`, data)
       .then(res => res.data);
 
-    // Backenddagi ApiResponse formatiga qarab ID ni olamiz:
-    // { status, message, data: { id, ... } } yoki { id, ... }
     const id = created?.data?.id ?? created?.id;
 
     if (!id) {
@@ -208,6 +184,41 @@ const dashboardService = {
 
   getEvents: () => axios.get(`${API_URL}/events`).then(res => res.data),
   createEvent: (data) => axios.post(`${API_URL}/events`, data).then(res => res.data),
+  approveUser: async (userId, validityMonths = 3) => {
+    try {
+      const response = await axios.post(`${API_URL}/users/${userId}/approve`, {
+        validityMonths
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Approve user error:', error);
+      throw error;
+    }
+  },resendActivationEmail: async (userId) => {
+    try {
+      const response = await axios.post(`${API_URL}/users/${userId}/resend-activation`);
+      return response.data;
+    } catch (error) {
+      console.error('Resend activation error:', error);
+      throw error;
+    }
+  },validateToken: async (token) => {
+    try {
+      const response = await axios.get(`${API_URL}/users/activate/validate/${token}`);
+      return response.data;
+    } catch (error) {
+      console.error('Validate token error:', error);
+      throw error;
+    }
+  },setPassword: async (data) => {
+    try {
+      const response = await axios.post(`${API_URL}/users/activate/set-password`, data);
+      return response.data;
+    } catch (error) {
+      console.error('Set password error:', error);
+      throw error;
+    }
+  },
 };
 
 export default dashboardService;
