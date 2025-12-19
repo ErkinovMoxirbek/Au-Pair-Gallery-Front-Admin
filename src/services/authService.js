@@ -3,7 +3,7 @@ import API_URL from '../config';
 
 const authService = {
   login: (email, password) =>
-    axios.post(`${API_URL}/auth/login`, { email, password }).then(res => res.data),
+    axios.post(`${API_URL}/auth/login/a`, { email, password }).then(res => res.data),
 
   refresh: (refreshToken) =>
     axios.post(`${API_URL}/auth/refresh`, { refreshToken }).then(res => res.data),
