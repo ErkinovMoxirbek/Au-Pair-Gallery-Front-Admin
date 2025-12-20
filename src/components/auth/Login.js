@@ -1,61 +1,8 @@
-// Login.js - Production Ready with Native Fetch
+// Login.js - Production Ready (UI o‘zgarmaydi) + authService (axios) bilan
 import { useState, useEffect } from 'react';
 import { Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
-import API_URL from '../../config';
 import { setTokens, setUser } from '../../utils/tokenManager';
-
-// API Service with native fetch
-const authAPI = {
-  login: async (email, password) => {
-    const response = await fetch(`${API_URL}/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ email, password })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.message || 'Anmeldung fehlgeschlagen');
-    }
-
-    return data;
-  },
-
-  getProfile: async (token) => {
-    const response = await fetch(`${API_URL}/auth/me`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error('Profil konnte nicht geladen werden');
-    }
-
-    return response.json();
-  },
-
-  refreshToken: async (refreshToken) => {
-    const response = await fetch(`${API_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ refreshToken })
-    });
-
-    if (!response.ok) {
-      throw new Error('Aktualisierung des Tokens ist fehlgeschlagen');
-    }
-
-    return response.json();
-  }
-};
+import authService from '../../services/authService';
 
 // Validators
 const validate = {
@@ -122,9 +69,22 @@ export default function Login({ onLoginSuccess, redirectUrl = '/dashboard' }) {
     setApiError('');
 
     try {
-      const data = await authAPI.login(formData.email, formData.password);
-      setTokens(data.data.accessToken, data.data.refreshToken);
-      setUser(data.data.user);
+      // axios service
+      const res = await authService.login(formData.email, formData.password);
+
+      // Backend format: { message, status, data: { accessToken, refreshToken, user } }
+      const payload = res?.data ?? res;
+
+      const accessToken = payload?.accessToken;
+      const refreshToken = payload?.refreshToken;
+      const user = payload?.user;
+
+      if (!accessToken || !refreshToken) {
+        throw new Error(res?.message || 'Anmeldung fehlgeschlagen');
+      }
+
+      setTokens(accessToken, refreshToken);
+      if (user) setUser(user);
 
       // Remember me functionality
       if (rememberMe) {
@@ -133,11 +93,11 @@ export default function Login({ onLoginSuccess, redirectUrl = '/dashboard' }) {
         localStorage.removeItem('rememberEmail');
       }
 
-      console.log('✅ Login erfolgreich:', data);
+      console.log('✅ Login erfolgreich:', res);
 
       // Call success callback
       if (onLoginSuccess) {
-        onLoginSuccess(data.user);
+        onLoginSuccess(user); // MUHIM: res.user emas, user (payload.user)
       } else {
         // Default redirect
         window.location.href = redirectUrl;
@@ -145,7 +105,14 @@ export default function Login({ onLoginSuccess, redirectUrl = '/dashboard' }) {
 
     } catch (error) {
       console.error('❌ Login Fehler:', error);
-      setApiError(error.message || 'Es ist ein unerwarteter Fehler aufgetreten');
+
+      // axios error message
+      const msg =
+        error?.response?.data?.message ||
+        error?.message ||
+        'Es ist ein unerwarteter Fehler aufgetreten';
+
+      setApiError(msg);
     } finally {
       setLoading(false);
     }
@@ -312,6 +279,3 @@ export default function Login({ onLoginSuccess, redirectUrl = '/dashboard' }) {
     </div>
   );
 }
-
-// Export token manager and API for use in other components
-export { authAPI };
