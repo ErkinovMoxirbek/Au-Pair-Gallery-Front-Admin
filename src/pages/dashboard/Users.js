@@ -12,6 +12,7 @@ import {
   ShieldAlert,
   CheckCircle2,
   Lock,
+  X,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -74,6 +75,31 @@ const getInitials = (name, surname) => {
   return `${(name?.[0] || '').toUpperCase()}${(surname?.[0] || '').toUpperCase()}`;
 };
 
+// datetime-local format: YYYY-MM-DDTHH:mm
+const toDateTimeLocalValue = (dateObj) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  const yyyy = dateObj.getFullYear();
+  const mm = pad(dateObj.getMonth() + 1);
+  const dd = pad(dateObj.getDate());
+  const hh = pad(dateObj.getHours());
+  const mi = pad(dateObj.getMinutes());
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+};
+
+const defaultValidUntilLocal = (months = 3) => {
+  const d = new Date();
+  d.setMonth(d.getMonth() + months);
+  return toDateTimeLocalValue(d);
+};
+
+// Convert datetime-local (YYYY-MM-DDTHH:mm) => LocalDateTime string (yyyy-MM-dd'T'HH:mm:ss)
+const toLocalDateTimeString = (dtLocal) => {
+  if (!dtLocal) return '';
+  // if "YYYY-MM-DDTHH:mm" => add ":00"
+  if (dtLocal.length === 16) return `${dtLocal}:00`;
+  return dtLocal;
+};
+
 export default function Users() {
   // --- STATE ---
   const [users, setUsers] = useState([]);
@@ -85,9 +111,14 @@ export default function Users() {
   const [activeTab, setActiveTab] = useState('ALL'); // Replaces filterStatus dropdown
   const [filterRole, setFilterRole] = useState('all');
 
-  // Modal
+  // Modal (Create/Edit)
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+
+  // ✅ Approve Modal (LocalDateTime validUntil)
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [approveUserId, setApproveUserId] = useState(null);
+  const [approveValidUntil, setApproveValidUntil] = useState(() => defaultValidUntilLocal(3));
 
   // --- DATA LOADING ---
   const loadUsers = useCallback(async () => {
@@ -144,15 +175,37 @@ export default function Users() {
     }
   };
 
-  const handleApprove = async (userId) => {
-    if (!window.confirm('Möchten Sie den Benutzer für 3 Monate genehmigen?')) return;
-    setProcessingId(userId);
+  // ✅ Approve flow (modal bilan)
+  const openApproveModal = (userId) => {
+    setApproveUserId(userId);
+    setApproveValidUntil(defaultValidUntilLocal(1)); // default 1 month
+    setShowApproveModal(true);
+  };
+
+  const closeApproveModal = () => {
+    setShowApproveModal(false);
+    setApproveUserId(null);
+  };
+
+  const confirmApprove = async () => {
+    if (!approveUserId) return;
+
+    const validUntil = toLocalDateTimeString(approveValidUntil);
+    if (!validUntil) {
+      toast.error('Bitte gültiges Datum auswählen');
+      return;
+    }
+
+    setProcessingId(approveUserId);
     try {
-      await dashboardService.approveUser(userId, 3);
+      // Backendga LDT yuboramiz
+      await dashboardService.approveUser(approveUserId, { validUntil });
       toast.success('Genehmigt und E-Mail wurde gesendet');
+      closeApproveModal();
       loadUsers();
     } catch (error) {
-      toast.error('Fehler bei der Genehmigung');
+      console.error('Approve error:', error);
+      toast.error(error?.response?.data?.message || 'Fehler bei der Genehmigung');
     } finally {
       setProcessingId(null);
     }
@@ -433,14 +486,13 @@ export default function Users() {
                             className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
                               user.status === 'ACTIVE' ? 'bg-green-500' : 'bg-current opacity-60'
                             }`}
-                          ></span>
+                          />
                           {statusInfo.label}
                         </span>
                       </td>
 
                       {/* Date (Mocked or Real if available) */}
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {/* Falls Backend Datum liefert: {new Date(user.createdAt).toLocaleDateString()} */}
                         <span className="text-gray-400">-</span>
                       </td>
 
@@ -450,7 +502,7 @@ export default function Users() {
                           {/* 1. APPROVE ACTION */}
                           {user.status === 'PENDING' && (
                             <button
-                              onClick={() => handleApprove(user.id)}
+                              onClick={() => openApproveModal(user.id)}
                               disabled={isProcessing || isAdmin}
                               className="text-green-600 hover:bg-green-50 p-1.5 rounded-lg border border-transparent hover:border-green-200 transition-all"
                               title="Genehmigen"
@@ -481,7 +533,10 @@ export default function Users() {
 
                           {/* 3. EDIT & DELETE */}
                           {isAdmin ? (
-                            <div className="p-1.5 text-gray-300 cursor-not-allowed" title="Admin kann nicht bearbeitet werden">
+                            <div
+                              className="p-1.5 text-gray-300 cursor-not-allowed"
+                              title="Admin kann nicht bearbeitet werden"
+                            >
                               <Lock className="w-4 h-4" />
                             </div>
                           ) : (
@@ -517,11 +572,10 @@ export default function Users() {
           <span className="text-xs text-gray-500 uppercase tracking-wide font-semibold">
             Gesamt: {filteredUsers.length} Ergebnis(se)
           </span>
-          {/* Pagination buttons here if backend supports */}
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Modal (Create/Edit) */}
       {showModal && (
         <Modal
           show={showModal}
@@ -530,6 +584,78 @@ export default function Users() {
           item={editingUser}
           onSave={handleSave}
         />
+      )}
+
+      {/* ✅ Approve Modal (LDT validUntil) */}
+      {showApproveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={closeApproveModal}
+          />
+          <div className="relative w-full max-w-md mx-4 bg-white rounded-xl shadow-lg border border-gray-200">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="text-base font-semibold text-gray-900">
+                Access muddati (validUntil)
+              </h3>
+              <button
+                onClick={closeApproveModal}
+                className="p-2 rounded-lg hover:bg-gray-50 text-gray-500"
+                title="Schließen"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-sm text-gray-600">
+                Foydalanuvchi qachongacha kirishi mumkinligini tanlang (LocalDateTime).
+              </p>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  validUntil (LocalDateTime)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={approveValidUntil}
+                  onChange={(e) => setApproveValidUntil(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+                <p className="mt-2 text-xs text-gray-500">
+                  Backendga quyidagicha yuboriladi: <span className="font-medium">yyyy-MM-ddTHH:mm:ss</span>
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button
+                onClick={closeApproveModal}
+                className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+              >
+                Bekor qilish
+              </button>
+
+              <button
+                onClick={confirmApprove}
+                disabled={processingId === approveUserId}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+              >
+                {processingId === approveUserId ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Yuborilmoqda...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    Approve
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

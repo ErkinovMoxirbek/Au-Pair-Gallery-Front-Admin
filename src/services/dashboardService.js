@@ -184,17 +184,15 @@ const dashboardService = {
 
   getEvents: () => axios.get(`${API_URL}/events`).then(res => res.data),
   createEvent: (data) => axios.post(`${API_URL}/events`, data).then(res => res.data),
-  approveUser: async (userId, validityMonths = 3) => {
-    try {
-      const response = await axios.post(`${API_URL}/users/${userId}/approve`, {
-        validityMonths
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Approve user error:', error);
-      throw error;
-    }
-  },resendActivationEmail: async (userId) => {
+  approveUser: async (userId, payload) => {
+  try {
+    const response = await axios.post(`${API_URL}/users/${userId}/approve`, payload);
+    return response.data;
+  } catch (error) {
+    console.error('Approve user error:', error);
+    throw error;
+  }
+},resendActivationEmail: async (userId) => {
     try {
       const response = await axios.post(`${API_URL}/users/${userId}/resend-activation`);
       return response.data;
