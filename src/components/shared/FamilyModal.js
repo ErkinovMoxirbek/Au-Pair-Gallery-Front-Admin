@@ -171,7 +171,7 @@ export default function FamilyModal({ show, onClose, item, onSave }) {
             pocketMoney: formData.pocketMoney
                ? Number(formData.pocketMoney)
                : null,
-            status: formData.isActive ? "ACTIVE" : "NOACTIVE",
+            status: formData.isActive ? "ACTIVE" : "INACTIVE",
          };
          delete payload.isActive;
          await onSave(payload);
