@@ -149,7 +149,7 @@ export default function Families() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editingFamily, setEditingFamily] = useState(null);
-  const [viewMode, setViewMode] = useState("grid"); // grid / list
+  const [viewMode] = useState("grid"); // grid / list
   const [selectedFamily, setSelectedFamily] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 

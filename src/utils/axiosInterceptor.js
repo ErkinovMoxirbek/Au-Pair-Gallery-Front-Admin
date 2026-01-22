@@ -1,7 +1,6 @@
 import axios from 'axios';
-import { getAccessToken, getRefreshToken, setTokens, clearAuth, getUser } from './tokenManager';
+import { getAccessToken, getRefreshToken, setTokens, clearAuth } from './tokenManager';
 import authService from '../services/authService';
-import { navigate } from 'react-router-dom';
 
 let isRefreshing = false;
 let failedQueue = [];

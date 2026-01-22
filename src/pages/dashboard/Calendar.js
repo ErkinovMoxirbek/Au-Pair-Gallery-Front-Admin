@@ -149,7 +149,7 @@ export default function AccessCalendar() {
 
   const activeUsersForSelected = useMemo(
     () => getActiveUsersForDate(selectedDate),
-    [selectedDate, normalizedUsers]
+    [selectedDate, getActiveUsersForDate]
   );
 
   return (
