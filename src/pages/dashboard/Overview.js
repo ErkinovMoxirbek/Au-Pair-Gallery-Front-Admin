@@ -1,14 +1,7 @@
-// src/pages/dashboard/Overview.js — FINAL (German UI)
+// src/pages/dashboard/Overview.js — FINAL (German UI) — backend: GET /api/v1/dashboard/stats
 
 import { useEffect, useState } from 'react';
-import {
-  Users,
-  Home,
-  Clock,
-  CheckCircle,
-  AlertCircle,
-  RefreshCw,
-} from 'lucide-react';
+import { Users, Home, Clock, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import dashboardService from '../../services/dashboardService';
 import LoadingSpinner from '../../components/shared/LoadingSpinner';
 
@@ -18,75 +11,78 @@ export default function Overview() {
     totalFamilies: 0,
     activeAuPairs: 0,
     pendingApplications: 0,
+    breakdown: {
+      userStatus: {},
+      familyStatus: {},
+      candidateStatus: {},
+    },
   });
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [retryCount, setRetryCount] = useState(0);
 
   const MAX_RETRIES = 3;
 
-  const fetchStats = async (isRetry = false) => {
-    if (!isRetry) {
+  // Tailwind-safe (dynamic class muammosini oldini oladi)
+  const colorMap = {
+    blue: { text: 'text-blue-600', bg: 'bg-blue-100', icon: 'text-blue-600' },
+    green: { text: 'text-green-600', bg: 'bg-green-100', icon: 'text-green-600' },
+    purple: { text: 'text-purple-600', bg: 'bg-purple-100', icon: 'text-purple-600' },
+    orange: { text: 'text-orange-600', bg: 'bg-orange-100', icon: 'text-orange-600' },
+  };
+
+  const fetchStats = async (attempt = 1) => {
+    if (attempt === 1) {
       setLoading(true);
       setError(null);
+      setRetryCount(0);
     }
 
     try {
-      console.log('Dashboard-Statistiken werden abgefragt... (Versuch:', retryCount + 1 + ')');
+      console.log(`Dashboard-Statistiken werden abgefragt... (Versuch: ${attempt})`);
       const response = await dashboardService.getStats();
       console.log('Roh-API-Antwort:', response);
 
-      // === STRUKTUR-PRÜFUNG ===
-      let data = null;
+      // axios response.data yoki direct object
+      const data = response?.data ?? response;
 
-      // 1. axios response.data
-      if (response?.data) {
-        data = response.data;
+      if (!data || typeof data !== 'object') {
+        throw new Error('Keine gültigen Antwortdaten');
       }
-      // 2. direktes Objekt
-      else if (response && typeof response === 'object') {
-        data = response;
-      }
-
-      if (!data) throw new Error('Keine Antwortdaten');
-
-      // 3. Verschachteltes `data` extrahieren
-      const statsData = data.data || data;
-
-      if (!statsData) throw new Error('Keine Statistikdaten in der Antwort');
 
       const finalStats = {
-        totalUsers: Number(statsData.totalUsers) || 0,
-        totalFamilies: Number(statsData.totalFamilies) || 0,
-        activeAuPairs: Number(statsData.activeAuPairs) || 0,
-        pendingApplications: Number(statsData.pendingApplications) || 0,
+        totalUsers: Number(data.totalUsers) || 0,
+        totalFamilies: Number(data.totalFamilies) || 0,
+        activeAuPairs: Number(data.activeAuPairs) || 0,
+        pendingApplications: Number(data.pendingApplications) || 0,
+        breakdown: {
+          userStatus: data.breakdown?.userStatus || {},
+          familyStatus: data.breakdown?.familyStatus || {},
+          candidateStatus: data.breakdown?.candidateStatus || {},
+        },
       };
 
       console.log('Geparste Statistiken:', finalStats);
       setStats(finalStats);
-      setRetryCount(0); // Retry zurücksetzen
+      setLoading(false);
     } catch (err) {
       console.error('Statistik-Abfrage fehlgeschlagen:', err);
 
-      if (retryCount < MAX_RETRIES) {
-        setTimeout(() => {
-          setRetryCount((prev) => prev + 1);
-          fetchStats(true);
-        }, 2000 * (retryCount + 1));
+      if (attempt < MAX_RETRIES) {
+        setRetryCount(attempt);
+        setTimeout(() => fetchStats(attempt + 1), 2000 * attempt);
       } else {
         setError(
           'Statistiken konnten nicht geladen werden. Bitte prüfen Sie Ihre Internetverbindung oder versuchen Sie es später erneut.'
         );
-      }
-    } finally {
-      if (!isRetry || retryCount >= MAX_RETRIES) {
         setLoading(false);
       }
     }
   };
 
   useEffect(() => {
-    fetchStats();
+    fetchStats(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -109,10 +105,7 @@ export default function Overview() {
         <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
         <p className="text-red-600 font-medium mb-2">{error}</p>
         <button
-          onClick={() => {
-            setRetryCount(0);
-            fetchStats();
-          }}
+          onClick={() => fetchStats(1)}
           className="flex items-center gap-2 mt-4 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
         >
           <RefreshCw className="w-4 h-4" />
@@ -122,32 +115,19 @@ export default function Overview() {
     );
   }
 
+  // breakdown’dan real qiymatlar
+  const pendingUsers = Number(stats.breakdown.userStatus?.PENDING) || 0;
+  const pendingCandidates = Number(stats.breakdown.candidateStatus?.PENDING) || 0;
+
   const statCards = [
-    {
-      title: 'Gesamtzahl der Benutzer',
-      value: stats.totalUsers,
-      icon: Users,
-      color: 'blue',
-    },
-    {
-      title: 'Familien',
-      value: stats.totalFamilies,
-      icon: Home,
-      color: 'green',
-    },
-    {
-      title: 'Aktive Kandidaten',
-      value: stats.activeAuPairs,
-      icon: CheckCircle,
-      color: 'purple',
-    },
-    {
-      title: 'Ausstehende Bewerbungen',
-      value: stats.pendingApplications,
-      icon: Clock,
-      color: 'orange',
-    },
+    { title: 'Gesamtzahl der Benutzer', value: stats.totalUsers, icon: Users, color: 'blue' },
+    { title: 'Familien', value: stats.totalFamilies, icon: Home, color: 'green' },
+    { title: 'Aktive Kandidaten', value: stats.activeAuPairs, icon: CheckCircle, color: 'purple' },
+    // Application yo‘q => backend pendingApplications = Candidate PENDING
+    { title: 'Ausstehende Bewerbungen', value: stats.pendingApplications, icon: Clock, color: 'orange' },
   ];
+
+  const isActionRequired = stats.pendingApplications > 0;
 
   return (
     <div className="space-y-6">
@@ -164,7 +144,7 @@ export default function Overview() {
           </p>
         </div>
         <button
-          onClick={() => fetchStats()}
+          onClick={() => fetchStats(1)}
           className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
@@ -173,53 +153,72 @@ export default function Overview() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((card, i) => (
-          <div
-            key={i}
-            className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow"
-          >
-            <div className="flex items-start justify-between mb-3">
-              <div>
-                <p className="text-sm font-medium text-gray-600">{card.title}</p>
-                <p className={`text-3xl font-bold mt-2 text-${card.color}-600`}>
-                  {card.value}
-                </p>
+        {statCards.map((card, i) => {
+          const cm = colorMap[card.color] || colorMap.blue;
+
+          return (
+            <div
+              key={i}
+              className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow"
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">{card.title}</p>
+                  <p className={`text-3xl font-bold mt-2 ${cm.text}`}>{card.value}</p>
+                </div>
+                <div className={`p-3 rounded-lg ${cm.bg}`}>
+                  <card.icon className={`w-6 h-6 ${cm.icon}`} />
+                </div>
               </div>
-              <div className={`p-3 rounded-lg bg-${card.color}-100`}>
-                <card.icon className={`w-6 h-6 text-${card.color}-600`} />
-              </div>
+
+              {card.value === 0 ? (
+                <span className="inline-block mt-2 px-2 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">
+                  Noch keine Daten
+                </span>
+              ) : (
+                // Qo‘shimcha micro-info (ixtiyoriy, lekin foydali)
+                card.title === 'Gesamtzahl der Benutzer' && pendingUsers > 0 ? (
+                  <span className="inline-block mt-2 px-2 py-1 text-xs font-medium bg-amber-50 text-amber-800 rounded-full">
+                    {pendingUsers} wartend (Ausstehend)
+                  </span>
+                ) : card.title === 'Aktive Kandidaten' && pendingCandidates > 0 ? (
+                  <span className="inline-block mt-2 px-2 py-1 text-xs font-medium bg-amber-50 text-amber-800 rounded-full">
+                    {pendingCandidates} Kandidat(en) wartend
+                  </span>
+                ) : null
+              )}
             </div>
-            {card.value === 0 && (
-              <span className="inline-block mt-2 px-2 py-1 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">
-                Noch keine Daten
-              </span>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            Letzte Aktivitäten
-          </h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Letzte Aktivitäten</h3>
+
           <div className="space-y-3 text-sm">
-            {stats.totalUsers === 0 ? (
+            {stats.totalUsers === 0 && stats.totalFamilies === 0 && stats.activeAuPairs === 0 ? (
               <p className="text-gray-500">Noch keine Aktivität</p>
             ) : (
               <>
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-gray-700">
-                    Neuer Benutzer wurde hinzugefügt
-                  </span>
-                </div>
-                {stats.pendingApplications > 0 && (
+                {stats.totalUsers > 0 && (
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="text-gray-700">Benutzerdaten wurden aktualisiert</span>
+                  </div>
+                )}
+
+                {pendingUsers > 0 && (
                   <div className="flex items-center gap-3">
                     <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                    <span className="text-gray-700">
-                      {stats.pendingApplications} neue Bewerbung(en)
-                    </span>
+                    <span className="text-gray-700">{pendingUsers} Benutzer warten auf Freigabe (Ausstehend)</span>
+                  </div>
+                )}
+
+                {pendingCandidates > 0 && (
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
+                    <span className="text-gray-700">{pendingCandidates} Kandidat(en) warten auf Prüfung</span>
                   </div>
                 )}
               </>
@@ -229,38 +228,31 @@ export default function Overview() {
 
         <div
           className={`rounded-xl p-6 border ${
-            stats.pendingApplications > 0
-              ? 'bg-amber-50 border-amber-200'
-              : 'bg-green-50 border-green-200'
+            isActionRequired ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'
           }`}
         >
           <div className="flex items-start gap-3">
-            {stats.pendingApplications > 0 ? (
+            {isActionRequired ? (
               <AlertCircle className="w-6 h-6 text-amber-600" />
             ) : (
               <CheckCircle className="w-6 h-6 text-green-600" />
             )}
+
             <div>
-              <h3
-                className={`font-semibold ${
-                  stats.pendingApplications > 0
-                    ? 'text-amber-900'
-                    : 'text-green-900'
-                }`}
-              >
-                {stats.pendingApplications > 0 ? 'Achtung!' : 'Super!'}
+              <h3 className={`font-semibold ${isActionRequired ? 'text-amber-900' : 'text-green-900'}`}>
+                {isActionRequired ? 'Achtung!' : 'Super!'}
               </h3>
-              <p
-                className={`text-sm mt-1 ${
-                  stats.pendingApplications > 0
-                    ? 'text-amber-800'
-                    : 'text-green-800'
-                }`}
-              >
-                {stats.pendingApplications > 0
+
+              <p className={`text-sm mt-1 ${isActionRequired ? 'text-amber-800' : 'text-green-800'}`}>
+                {isActionRequired
                   ? `Für ${stats.pendingApplications} Bewerbung(en) steht eine Entscheidung noch aus.`
                   : 'Alle Bewerbungen sind aktuell bearbeitet!'}
               </p>
+
+              {/* Agar keyin route bo‘lsa, CTA qo‘shib ketishingiz mumkin */}
+              {/* <a href="/dashboard/candidates?status=PENDING" className="inline-block mt-3 text-sm font-medium underline">
+                Zu wartenden Kandidaten
+              </a> */}
             </div>
           </div>
         </div>

@@ -204,7 +204,7 @@ export default function Users() {
       closeApproveModal();
       loadUsers();
     } catch (error) {
-      console.error('Approve error:', error);
+      console.error('Fehler genehmigen:', error);
       toast.error(error?.response?.data?.message || 'Fehler bei der Genehmigung');
     } finally {
       setProcessingId(null);
@@ -596,7 +596,7 @@ export default function Users() {
           <div className="relative w-full max-w-md mx-4 bg-white rounded-xl shadow-lg border border-gray-200">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <h3 className="text-base font-semibold text-gray-900">
-                Access muddati (validUntil)
+                Zugriffszeitraum (gültig bis)
               </h3>
               <button
                 onClick={closeApproveModal}
@@ -609,12 +609,12 @@ export default function Users() {
 
             <div className="px-5 py-4 space-y-3">
               <p className="text-sm text-gray-600">
-                Foydalanuvchi qachongacha kirishi mumkinligini tanlang (LocalDateTime).
+                Wählen Sie die Zeit aus, zu der sich der Benutzer anmelden kann.
               </p>
 
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">
-                  validUntil (LocalDateTime)
+                  gültigbis (LokalesDatum/Uhrzeit)
                 </label>
                 <input
                   type="datetime-local"
@@ -622,9 +622,6 @@ export default function Users() {
                   onChange={(e) => setApproveValidUntil(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
-                <p className="mt-2 text-xs text-gray-500">
-                  Backendga quyidagicha yuboriladi: <span className="font-medium">yyyy-MM-ddTHH:mm:ss</span>
-                </p>
               </div>
             </div>
 
@@ -633,7 +630,7 @@ export default function Users() {
                 onClick={closeApproveModal}
                 className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
               >
-                Bekor qilish
+                Stornieren
               </button>
 
               <button
@@ -644,12 +641,12 @@ export default function Users() {
                 {processingId === approveUserId ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" />
-                    Yuborilmoqda...
+                    Senden...
                   </>
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    Approve
+                    Genehmigen
                   </>
                 )}
               </button>

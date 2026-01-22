@@ -66,7 +66,7 @@ const dashboardService = {
   deleteCandidate: (id) =>
     axios.delete(`${API_URL}/candidates/${id}`).then(res => res.data),
 
-  
+
   getCandidatePhotos: (id) =>
     axios.get(`${API_URL}/candidates/${id}/photos`).then(res => res.data),
 
@@ -172,10 +172,21 @@ const dashboardService = {
   // ======================
   // OTHER SERVICES
   // ======================
-  getStats: () => axios.get(`${API_URL}/stats`).then(res => res.data),
+  getStats: () => axios.get(`${API_URL}/dashboard/stats`).then(res => res.data),
 
   getApplications: () => axios.get(`${API_URL}/applications`).then(res => res.data),
 
+  updateAdmin: (payload) =>
+    axios.put(`${API_URL}/users/admin`, payload).then((res) => res.data),
+
+  forgotPassword: ({ email }) =>
+    axios
+      .post(
+        `${API_URL}/auth/password/forgot`,
+        { email },
+        { headers: { "Accept-Language": "uz" } }
+      )
+      .then((res) => res.data),
   updateApplicationStatus: (id, status) =>
     axios.patch(`${API_URL}/applications/${id}/status`, { status }).then(res => res.data),
 
@@ -185,14 +196,14 @@ const dashboardService = {
   getEvents: () => axios.get(`${API_URL}/events`).then(res => res.data),
   createEvent: (data) => axios.post(`${API_URL}/events`, data).then(res => res.data),
   approveUser: async (userId, payload) => {
-  try {
-    const response = await axios.post(`${API_URL}/users/${userId}/approve`, payload);
-    return response.data;
-  } catch (error) {
-    console.error('Approve user error:', error);
-    throw error;
-  }
-},resendActivationEmail: async (userId) => {
+    try {
+      const response = await axios.post(`${API_URL}/users/${userId}/approve`, payload);
+      return response.data;
+    } catch (error) {
+      console.error('Approve user error:', error);
+      throw error;
+    }
+  }, resendActivationEmail: async (userId) => {
     try {
       const response = await axios.post(`${API_URL}/users/${userId}/resend-activation`);
       return response.data;
@@ -200,7 +211,7 @@ const dashboardService = {
       console.error('Resend activation error:', error);
       throw error;
     }
-  },validateToken: async (token) => {
+  }, validateToken: async (token) => {
     try {
       const response = await axios.get(`${API_URL}/users/activate/validate/${token}`);
       return response.data;
@@ -208,7 +219,7 @@ const dashboardService = {
       console.error('Validate token error:', error);
       throw error;
     }
-  },setPassword: async (data) => {
+  }, setPassword: async (data) => {
     try {
       const response = await axios.post(`${API_URL}/users/activate/set-password`, data);
       return response.data;
