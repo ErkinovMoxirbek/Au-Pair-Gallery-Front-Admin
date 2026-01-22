@@ -1,5 +1,5 @@
 // src/pages/dashboard/AccessCalendar.js
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -104,13 +104,17 @@ export default function AccessCalendar() {
   }, [users]);
 
   // Berilgan kunda aktiv bo'lgan userlar
-  const getActiveUsersForDate = (date) => {
-    if (!Array.isArray(normalizedUsers)) return [];
-    return normalizedUsers.filter((u) => {
-      if (!u._validFrom || !u._validUntil) return false;
-      return u._validFrom <= date && date <= u._validUntil;
-    });
-  };
+  const getActiveUsersForDate = useCallback(
+    (date) => {
+      if (!Array.isArray(normalizedUsers)) return [];
+      return normalizedUsers.filter((u) => {
+        if (!u._validFrom || !u._validUntil) return false;
+        return u._validFrom <= date && date <= u._validUntil;
+      });
+    },
+    [normalizedUsers]
+  );
+
 
   // Griddagi kun uchun count
   const getCountForDate = (date) => getActiveUsersForDate(date).length;
