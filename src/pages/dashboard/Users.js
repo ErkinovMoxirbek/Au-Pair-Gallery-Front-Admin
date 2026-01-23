@@ -95,20 +95,53 @@ const defaultValidUntilLocal = (months = 3) => {
 // Convert datetime-local (YYYY-MM-DDTHH:mm) => LocalDateTime string (yyyy-MM-dd'T'HH:mm:ss)
 const toLocalDateTimeString = (dtLocal) => {
   if (!dtLocal) return '';
-  // if "YYYY-MM-DDTHH:mm" => add ":00"
   if (dtLocal.length === 16) return `${dtLocal}:00`;
   return dtLocal;
 };
+
+/**
+ * ✅ Pagination helper:
+ * - Agar backend Page qaytarsa (data.content + data.totalPages) => hamma pagelarni yig'adi
+ * - Agar backend array qaytarsa => shu arrayni qaytaradi
+ * UI o'zgarmaydi, faqat data to'liq keladi.
+ */
+async function fetchAllUsersPaged() {
+  const PAGE_SIZE = 50; // xohlasangiz 100 ham qilishingiz mumkin
+  let page = 0;
+  let all = [];
+
+  // 1) Birinchi so'rov: backend page qaytaradimi yoki array?
+  const first = await dashboardService.getUsers({ page, size: PAGE_SIZE });
+
+  // Array qaytsa (paginatsiyasiz)
+  if (Array.isArray(first?.data)) return first.data;
+
+  // Page qaytsa
+  const content = Array.isArray(first?.data?.content) ? first.data.content : [];
+  all = all.concat(content);
+
+  const totalPages =
+    typeof first?.data?.totalPages === 'number' ? first.data.totalPages : 1;
+
+  // 2) Qolgan pagelarni olib chiqamiz
+  for (page = 1; page < totalPages; page++) {
+    const res = await dashboardService.getUsers({ page, size: PAGE_SIZE });
+    const list = Array.isArray(res?.data?.content) ? res.data.content : [];
+    all = all.concat(list);
+  }
+
+  return all;
+}
 
 export default function Users() {
   // --- STATE ---
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [processingId, setProcessingId] = useState(null); // ID of user being processed
+  const [processingId, setProcessingId] = useState(null);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState('ALL'); // Replaces filterStatus dropdown
+  const [activeTab, setActiveTab] = useState('ALL');
   const [filterRole, setFilterRole] = useState('all');
 
   // Modal (Create/Edit)
@@ -118,19 +151,17 @@ export default function Users() {
   // ✅ Approve Modal (LocalDateTime validUntil)
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [approveUserId, setApproveUserId] = useState(null);
-  const [approveValidUntil, setApproveValidUntil] = useState(() => defaultValidUntilLocal(3));
+  const [approveValidUntil, setApproveValidUntil] = useState(() =>
+    defaultValidUntilLocal(3)
+  );
 
   // --- DATA LOADING ---
   const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await dashboardService.getUsers();
-      const list = Array.isArray(res?.data?.content)
-        ? res.data.content
-        : Array.isArray(res?.data)
-        ? res.data
-        : [];
-      setUsers(list);
+      // ✅ UI o'zgarmaydi, lekin hamma user keladi
+      const list = await fetchAllUsersPaged();
+      setUsers(Array.isArray(list) ? list : []);
     } catch (error) {
       console.error('Error loading users:', error);
       toast.error('Fehler beim Laden der Benutzer');
@@ -178,7 +209,7 @@ export default function Users() {
   // ✅ Approve flow (modal bilan)
   const openApproveModal = (userId) => {
     setApproveUserId(userId);
-    setApproveValidUntil(defaultValidUntilLocal(1)); // default 1 month
+    setApproveValidUntil(defaultValidUntilLocal(1));
     setShowApproveModal(true);
   };
 
@@ -198,7 +229,6 @@ export default function Users() {
 
     setProcessingId(approveUserId);
     try {
-      // Backendga LDT yuboramiz
       await dashboardService.approveUser(approveUserId, { validUntil });
       toast.success('Genehmigt und E-Mail wurde gesendet');
       closeApproveModal();
@@ -240,17 +270,14 @@ export default function Users() {
   // --- FILTERING LOGIC ---
   const filteredUsers = useMemo(() => {
     return users.filter((user) => {
-      // 1. Search
       const search = searchTerm.toLowerCase();
       const matchesSearch =
         (user.name || '').toLowerCase().includes(search) ||
         (user.surname || '').toLowerCase().includes(search) ||
         (user.email || '').toLowerCase().includes(search);
 
-      // 2. Tab Filter (Status)
       const matchesStatus = activeTab === 'ALL' || user.status === activeTab;
 
-      // 3. Role Filter
       let matchesRole = true;
       if (filterRole !== 'all') {
         if (filterRole === 'ADMIN') {
@@ -264,7 +291,6 @@ export default function Users() {
     });
   }, [users, searchTerm, activeTab, filterRole]);
 
-  // Derived Stats
   const stats = useMemo(
     () => ({
       total: users.length,
@@ -274,10 +300,15 @@ export default function Users() {
     [users]
   );
 
-  // Export CSV
   const exportCSV = () => {
     const header = ['Vorname', 'Nachname', 'E-Mail', 'Rolle', 'Status'];
-    const rows = filteredUsers.map((u) => [u.name, u.surname, u.email, (u.roles || []).join(', '), u.status]);
+    const rows = filteredUsers.map((u) => [
+      u.name,
+      u.surname,
+      u.email,
+      (u.roles || []).join(', '),
+      u.status,
+    ]);
     const csvContent = [header, ...rows].map((e) => e.join(',')).join('\n');
     const link = document.createElement('a');
     link.href = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }));
@@ -491,7 +522,7 @@ export default function Users() {
                         </span>
                       </td>
 
-                      {/* Date (Mocked or Real if available) */}
+                      {/* Date */}
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <span className="text-gray-400">-</span>
                       </td>
@@ -499,7 +530,6 @@ export default function Users() {
                       {/* Actions */}
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
-                          {/* 1. APPROVE ACTION */}
                           {user.status === 'PENDING' && (
                             <button
                               onClick={() => openApproveModal(user.id)}
@@ -515,7 +545,6 @@ export default function Users() {
                             </button>
                           )}
 
-                          {/* 2. RESEND EMAIL */}
                           {user.status === 'APPROVED' && (
                             <button
                               onClick={() => handleResendEmail(user.id)}
@@ -531,7 +560,6 @@ export default function Users() {
                             </button>
                           )}
 
-                          {/* 3. EDIT & DELETE */}
                           {isAdmin ? (
                             <div
                               className="p-1.5 text-gray-300 cursor-not-allowed"
@@ -567,7 +595,6 @@ export default function Users() {
           </table>
         </div>
 
-        {/* Footer Stats */}
         <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-between items-center">
           <span className="text-xs text-gray-500 uppercase tracking-wide font-semibold">
             Gesamt: {filteredUsers.length} Ergebnis(se)
@@ -575,7 +602,6 @@ export default function Users() {
         </div>
       </div>
 
-      {/* Modal (Create/Edit) */}
       {showModal && (
         <Modal
           show={showModal}
@@ -586,18 +612,12 @@ export default function Users() {
         />
       )}
 
-      {/* ✅ Approve Modal (LDT validUntil) */}
       {showApproveModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/40"
-            onClick={closeApproveModal}
-          />
+          <div className="absolute inset-0 bg-black/40" onClick={closeApproveModal} />
           <div className="relative w-full max-w-md mx-4 bg-white rounded-xl shadow-lg border border-gray-200">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h3 className="text-base font-semibold text-gray-900">
-                Zugriffszeitraum (gültig bis)
-              </h3>
+              <h3 className="text-base font-semibold text-gray-900">Zugriffszeitraum (gültig bis)</h3>
               <button
                 onClick={closeApproveModal}
                 className="p-2 rounded-lg hover:bg-gray-50 text-gray-500"
