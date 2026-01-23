@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   Lock,
   X,
+  ChevronDown,
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -24,34 +25,13 @@ import Modal from '../../components/shared/UserModal';
 
 const STATUS_CONFIG = {
   ALL: { label: 'Alle', color: 'bg-gray-100 text-gray-700' },
-  PENDING: {
-    label: 'Wartet auf Genehmigung',
-    color: 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-600/20',
-  },
-  APPROVED: {
-    label: 'Genehmigt',
-    color: 'bg-blue-50 text-blue-700 ring-1 ring-blue-700/10',
-  },
-  ACTIVE: {
-    label: 'Aktiv',
-    color: 'bg-green-50 text-green-700 ring-1 ring-green-600/20',
-  },
-  NOACTIVE: {
-    label: 'Inaktiv',
-    color: 'bg-gray-100 text-gray-600 ring-1 ring-gray-500/10',
-  },
-  EXPIRED: {
-    label: 'Abgelaufen',
-    color: 'bg-orange-50 text-orange-700 ring-1 ring-orange-600/20',
-  },
-  REJECTED: {
-    label: 'Abgelehnt',
-    color: 'bg-red-50 text-red-700 ring-1 ring-red-600/10',
-  },
-  SUSPENDED: {
-    label: 'Gesperrt',
-    color: 'bg-red-50 text-red-700 ring-1 ring-red-600/10',
-  },
+  PENDING: { label: 'Wartet auf Genehmigung', color: 'bg-yellow-50 text-yellow-700 ring-1 ring-yellow-600/20' },
+  APPROVED: { label: 'Genehmigt', color: 'bg-blue-50 text-blue-700 ring-1 ring-blue-700/10' },
+  ACTIVE: { label: 'Aktiv', color: 'bg-green-50 text-green-700 ring-1 ring-green-600/20' },
+  NOACTIVE: { label: 'Inaktiv', color: 'bg-gray-100 text-gray-600 ring-1 ring-gray-500/10' },
+  EXPIRED: { label: 'Abgelaufen', color: 'bg-orange-50 text-orange-700 ring-1 ring-orange-600/20' },
+  REJECTED: { label: 'Abgelehnt', color: 'bg-red-50 text-red-700 ring-1 ring-red-600/10' },
+  SUSPENDED: { label: 'Gesperrt', color: 'bg-red-50 text-red-700 ring-1 ring-red-600/10' },
 };
 
 const ROLE_LABELS = {
@@ -71,19 +51,15 @@ const isAdminUser = (user) => {
   return user.roles.some((r) => adminRoles.includes(r));
 };
 
-const getInitials = (name, surname) => {
-  return `${(name?.[0] || '').toUpperCase()}${(surname?.[0] || '').toUpperCase()}`;
-};
+const getInitials = (name, surname) =>
+  `${(name?.[0] || '').toUpperCase()}${(surname?.[0] || '').toUpperCase()}`;
 
 // datetime-local format: YYYY-MM-DDTHH:mm
 const toDateTimeLocalValue = (dateObj) => {
   const pad = (n) => String(n).padStart(2, '0');
-  const yyyy = dateObj.getFullYear();
-  const mm = pad(dateObj.getMonth() + 1);
-  const dd = pad(dateObj.getDate());
-  const hh = pad(dateObj.getHours());
-  const mi = pad(dateObj.getMinutes());
-  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+  return `${dateObj.getFullYear()}-${pad(dateObj.getMonth() + 1)}-${pad(dateObj.getDate())}T${pad(
+    dateObj.getHours()
+  )}:${pad(dateObj.getMinutes())}`;
 };
 
 const defaultValidUntilLocal = (months = 3) => {
@@ -99,80 +75,170 @@ const toLocalDateTimeString = (dtLocal) => {
   return dtLocal;
 };
 
-/**
- * ✅ Pagination helper:
- * - Agar backend Page qaytarsa (data.content + data.totalPages) => hamma pagelarni yig'adi
- * - Agar backend array qaytarsa => shu arrayni qaytaradi
- * UI o'zgarmaydi, faqat data to'liq keladi.
- */
-async function fetchAllUsersPaged() {
-  const PAGE_SIZE = 50; // xohlasangiz 100 ham qilishingiz mumkin
-  let page = 0;
-  let all = [];
+const extractPage = (res) => {
+  const api = res?.data;
 
-  // 1) Birinchi so'rov: backend page qaytaradimi yoki array?
-  const first = await dashboardService.getUsers({ page, size: PAGE_SIZE });
-
-  // Array qaytsa (paginatsiyasiz)
-  if (Array.isArray(first?.data)) return first.data;
-
-  // Page qaytsa
-  const content = Array.isArray(first?.data?.content) ? first.data.content : [];
-  all = all.concat(content);
-
-  const totalPages =
-    typeof first?.data?.totalPages === 'number' ? first.data.totalPages : 1;
-
-  // 2) Qolgan pagelarni olib chiqamiz
-  for (page = 1; page < totalPages; page++) {
-    const res = await dashboardService.getUsers({ page, size: PAGE_SIZE });
-    const list = Array.isArray(res?.data?.content) ? res.data.content : [];
-    all = all.concat(list);
+  // ApiResponse.data = PageResponse
+  const pageA = api?.data;
+  if (pageA && Array.isArray(pageA.content)) {
+    return {
+      content: pageA.content,
+      number: pageA.number ?? 0,
+      size: pageA.size ?? 20,
+      totalElements: pageA.totalElements ?? 0,
+      totalPages: pageA.totalPages ?? 0,
+      first: !!pageA.first,
+      last: !!pageA.last,
+    };
   }
 
-  return all;
-}
+  // direct page
+  if (api && Array.isArray(api.content)) {
+    return {
+      content: api.content,
+      number: api.number ?? 0,
+      size: api.size ?? 20,
+      totalElements: api.totalElements ?? 0,
+      totalPages: api.totalPages ?? 0,
+      first: !!api.first,
+      last: !!api.last,
+    };
+  }
+
+  // array fallback
+  if (Array.isArray(api)) {
+    return {
+      content: api,
+      number: 0,
+      size: api.length,
+      totalElements: api.length,
+      totalPages: 1,
+      first: true,
+      last: true,
+    };
+  }
+
+  return { content: [], number: 0, size: 20, totalElements: 0, totalPages: 0, first: true, last: true };
+};
 
 export default function Users() {
-  // --- STATE ---
+  // --- LIST STATE (infinite "load more") ---
   const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);        // initial load
+  const [loadingMore, setLoadingMore] = useState(false); // load more
   const [processingId, setProcessingId] = useState(null);
 
+  // page meta
+  const [page, setPage] = useState(0); // current loaded page index
+  const [size, setSize] = useState(20);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+
   // Filters
-  const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('ALL');
   const [filterRole, setFilterRole] = useState('all');
+
+  // Search UX (manual)
+  const [searchInput, setSearchInput] = useState(''); // what user types
+  const [searchQuery, setSearchQuery] = useState(''); // applied query (after submit)
 
   // Modal (Create/Edit)
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
 
-  // ✅ Approve Modal (LocalDateTime validUntil)
+  // Approve Modal
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [approveUserId, setApproveUserId] = useState(null);
-  const [approveValidUntil, setApproveValidUntil] = useState(() =>
-    defaultValidUntilLocal(3)
+  const [approveValidUntil, setApproveValidUntil] = useState(() => defaultValidUntilLocal(3));
+
+  // --- Build params once ---
+  const buildParams = useCallback(
+    (pageToLoad) => ({
+      page: pageToLoad,
+      size,
+      sort: 'createdAt',
+      direction: 'desc',
+      status: activeTab === 'ALL' ? undefined : activeTab,
+      q: searchQuery ? searchQuery : undefined,
+      role: filterRole === 'all' ? undefined : filterRole,
+    }),
+    [size, activeTab, searchQuery, filterRole]
   );
 
-  // --- DATA LOADING ---
-  const loadUsers = useCallback(async () => {
+  // --- Reset & load first page ---
+  const reloadFirstPage = useCallback(async () => {
     setLoading(true);
     try {
-      // ✅ UI o'zgarmaydi, lekin hamma user keladi
-      const list = await fetchAllUsersPaged();
-      setUsers(Array.isArray(list) ? list : []);
-    } catch (error) {
-      console.error('Error loading users:', error);
+      const res = await dashboardService.getUsers(buildParams(0));
+      const pageData = extractPage(res);
+
+      setUsers(pageData.content || []);
+      setPage(0);
+      setTotalPages(pageData.totalPages ?? 0);
+      setTotalElements(pageData.totalElements ?? 0);
+    } catch (e) {
+      console.error(e);
       toast.error('Fehler beim Laden der Benutzer');
+      setUsers([]);
+      setPage(0);
+      setTotalPages(0);
+      setTotalElements(0);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [buildParams]);
 
+  // initial + whenever filters/searchQuery/size change => reset list
   useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    reloadFirstPage();
+  }, [reloadFirstPage]);
+
+  // --- Load more ---
+  const loadMore = async () => {
+    if (loadingMore) return;
+    const nextPage = page + 1;
+    if (totalPages !== 0 && nextPage >= totalPages) return;
+
+    setLoadingMore(true);
+    try {
+      const res = await dashboardService.getUsers(buildParams(nextPage));
+      const pageData = extractPage(res);
+
+      // append (avoid duplicates by id)
+      setUsers((prev) => {
+        const map = new Map(prev.map((u) => [u.id, u]));
+        (pageData.content || []).forEach((u) => map.set(u.id, u));
+        return Array.from(map.values());
+      });
+
+      setPage(nextPage);
+      setTotalPages(pageData.totalPages ?? totalPages);
+      setTotalElements(pageData.totalElements ?? totalElements);
+    } catch (e) {
+      console.error(e);
+      toast.error('Fehler beim Nachladen');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // --- SEARCH submit (manual) ---
+  const applySearch = () => {
+    const q = searchInput.trim();
+    setSearchQuery(q); // triggers reloadFirstPage via effect
+  };
+
+  const onSearchKeyDown = (e) => {
+    if (e.key === 'Enter') applySearch();
+  };
+
+  const resetFilters = () => {
+    setActiveTab('ALL');
+    setFilterRole('all');
+    setSize(20);
+    setSearchInput('');
+    setSearchQuery('');
+  };
 
   // --- ACTIONS ---
   const handleSave = async (userData) => {
@@ -189,7 +255,7 @@ export default function Users() {
         }
       }
       closeModal();
-      loadUsers();
+      reloadFirstPage();
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Es ist ein Fehler aufgetreten');
     }
@@ -200,44 +266,9 @@ export default function Users() {
     try {
       await dashboardService.deleteUser(id);
       toast.success('Gelöscht');
-      loadUsers();
-    } catch (error) {
+      reloadFirstPage();
+    } catch {
       toast.error('Fehler beim Löschen');
-    }
-  };
-
-  // ✅ Approve flow (modal bilan)
-  const openApproveModal = (userId) => {
-    setApproveUserId(userId);
-    setApproveValidUntil(defaultValidUntilLocal(1));
-    setShowApproveModal(true);
-  };
-
-  const closeApproveModal = () => {
-    setShowApproveModal(false);
-    setApproveUserId(null);
-  };
-
-  const confirmApprove = async () => {
-    if (!approveUserId) return;
-
-    const validUntil = toLocalDateTimeString(approveValidUntil);
-    if (!validUntil) {
-      toast.error('Bitte gültiges Datum auswählen');
-      return;
-    }
-
-    setProcessingId(approveUserId);
-    try {
-      await dashboardService.approveUser(approveUserId, { validUntil });
-      toast.success('Genehmigt und E-Mail wurde gesendet');
-      closeApproveModal();
-      loadUsers();
-    } catch (error) {
-      console.error('Fehler genehmigen:', error);
-      toast.error(error?.response?.data?.message || 'Fehler bei der Genehmigung');
-    } finally {
-      setProcessingId(null);
     }
   };
 
@@ -246,7 +277,7 @@ export default function Users() {
     try {
       await dashboardService.resendActivationEmail(userId);
       toast.success('E-Mail wurde erneut gesendet');
-    } catch (error) {
+    } catch {
       toast.error('Es ist ein Fehler aufgetreten');
     } finally {
       setProcessingId(null);
@@ -267,65 +298,70 @@ export default function Users() {
     setEditingUser(null);
   };
 
-  // --- FILTERING LOGIC ---
-  const filteredUsers = useMemo(() => {
-    return users.filter((user) => {
-      const search = searchTerm.toLowerCase();
-      const matchesSearch =
-        (user.name || '').toLowerCase().includes(search) ||
-        (user.surname || '').toLowerCase().includes(search) ||
-        (user.email || '').toLowerCase().includes(search);
+  // approve
+  const openApproveModal = (userId) => {
+    setApproveUserId(userId);
+    setApproveValidUntil(defaultValidUntilLocal(1));
+    setShowApproveModal(true);
+  };
 
-      const matchesStatus = activeTab === 'ALL' || user.status === activeTab;
+  const closeApproveModal = () => {
+    setShowApproveModal(false);
+    setApproveUserId(null);
+  };
 
-      let matchesRole = true;
-      if (filterRole !== 'all') {
-        if (filterRole === 'ADMIN') {
-          matchesRole = isAdminUser(user);
-        } else {
-          matchesRole = user.roles?.some((r) => r === filterRole || r === `ROLE_${filterRole}`);
-        }
-      }
+  const confirmApprove = async () => {
+    if (!approveUserId) return;
+    const validUntil = toLocalDateTimeString(approveValidUntil);
+    if (!validUntil) return toast.error('Bitte gültiges Datum auswählen');
 
-      return matchesSearch && matchesStatus && matchesRole;
-    });
-  }, [users, searchTerm, activeTab, filterRole]);
+    setProcessingId(approveUserId);
+    try {
+      await dashboardService.approveUser(approveUserId, { validUntil });
+      toast.success('Genehmigt und E-Mail wurde gesendet');
+      closeApproveModal();
+      reloadFirstPage();
+    } catch (e) {
+      console.error(e);
+      toast.error(e?.response?.data?.message || 'Fehler bei der Genehmigung');
+    } finally {
+      setProcessingId(null);
+    }
+  };
 
-  const stats = useMemo(
-    () => ({
-      total: users.length,
-      pending: users.filter((u) => u.status === 'PENDING').length,
-      approved: users.filter((u) => u.status === 'APPROVED').length,
-    }),
-    [users]
-  );
+  // Derived stats (current loaded list)
+  const stats = useMemo(() => {
+    const pending = users.filter((u) => u.status === 'PENDING').length;
+    return { totalLoaded: users.length, pendingLoaded: pending };
+  }, [users]);
 
+  // Export CSV (loaded users)
   const exportCSV = () => {
     const header = ['Vorname', 'Nachname', 'E-Mail', 'Rolle', 'Status'];
-    const rows = filteredUsers.map((u) => [
-      u.name,
-      u.surname,
-      u.email,
-      (u.roles || []).join(', '),
-      u.status,
-    ]);
-    const csvContent = [header, ...rows].map((e) => e.join(',')).join('\n');
+    const rows = users.map((u) => [u.name, u.surname, u.email, (u.roles || []).join(', '), u.status]);
+    const csvContent = [header, ...rows]
+      .map((e) => e.map((x) => `"${String(x ?? '').replaceAll('"', '""')}"`).join(','))
+      .join('\n');
+
     const link = document.createElement('a');
     link.href = URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }));
-    link.download = 'users_export.csv';
+    link.download = 'users_export_loaded.csv';
     link.click();
   };
+
+  const canLoadMore = totalPages === 0 ? false : page < totalPages - 1;
 
   if (loading) return <LoadingSpinner />;
 
   return (
     <div className="min-h-screen bg-gray-50/50 p-6 space-y-6">
-      {/* --- HEADER SECTION --- */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Benutzer</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Insgesamt {stats.total} Benutzer, davon warten {stats.pending} auf Genehmigung.
+            Insgesamt {totalElements} Benutzer • Geladen {stats.totalLoaded}
+            {searchQuery ? ` • Suche: "${searchQuery}"` : ''}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -334,7 +370,7 @@ export default function Users() {
             className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm"
           >
             <Download className="w-4 h-4" />
-            Export
+            Export (Geladen)
           </button>
           <button
             onClick={() => openModal()}
@@ -346,15 +382,15 @@ export default function Users() {
         </div>
       </div>
 
-      {/* --- FILTERS & TABS CARD --- */}
+      {/* FILTERS */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-        {/* Top: Status Tabs */}
+        {/* Status tabs */}
         <div className="border-b border-gray-100 overflow-x-auto">
           <div className="flex items-center px-2">
             {[
               { id: 'ALL', label: 'Alle' },
-              { id: 'PENDING', label: 'Wartet', count: stats.pending, color: 'text-yellow-600 bg-yellow-50' },
-              { id: 'APPROVED', label: 'Genehmigt', count: stats.approved, color: 'text-blue-600 bg-blue-50' },
+              { id: 'PENDING', label: 'Wartet' },
+              { id: 'APPROVED', label: 'Genehmigt' },
               { id: 'ACTIVE', label: 'Aktive' },
               { id: 'NOACTIVE', label: 'Inaktive' },
             ].map((tab) => (
@@ -362,16 +398,11 @@ export default function Users() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`
-                  relative px-4 py-4 text-sm font-medium transition-colors whitespace-nowrap flex items-center gap-2
+                  relative px-4 py-4 text-sm font-medium transition-colors whitespace-nowrap
                   ${activeTab === tab.id ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'}
                 `}
               >
                 {tab.label}
-                {tab.count > 0 && (
-                  <span className={`px-2 py-0.5 rounded-full text-xs ${tab.color}`}>
-                    {tab.count}
-                  </span>
-                )}
                 {activeTab === tab.id && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-t-full" />
                 )}
@@ -380,38 +411,95 @@ export default function Users() {
           </div>
         </div>
 
-        {/* Bottom: Search & Role Filter */}
-        <div className="p-4 flex flex-col sm:flex-row gap-4 justify-between items-center bg-gray-50/30">
-          <div className="relative w-full sm:max-w-md">
+        {/* Search + Role + Size */}
+        <div className="p-4 flex flex-col lg:flex-row gap-4 justify-between items-center bg-gray-50/30">
+          <div className="relative w-full lg:max-w-md">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <Search className="h-4 w-4 text-gray-400" />
             </div>
+
             <input
               type="text"
               placeholder="Suche nach Name oder E-Mail..."
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              className="block w-full pl-10 pr-24 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 sm:text-sm transition-shadow"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={onSearchKeyDown}
             />
+
+            <div className="absolute inset-y-0 right-2 flex items-center gap-2">
+              {searchQuery && (
+                <button
+                  onClick={() => {
+                    setSearchInput('');
+                    setSearchQuery('');
+                  }}
+                  className="text-xs px-2 py-1 rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                  title="Suche löschen"
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                onClick={applySearch}
+                className="text-xs px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+                title="Suchen"
+              >
+                Search
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Filter className="w-4 h-4 text-gray-400 hidden sm:block" />
-            <select
-              value={filterRole}
-              onChange={(e) => setFilterRole(e.target.value)}
-              className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg bg-white"
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Filter className="w-4 h-4 text-gray-400 hidden sm:block" />
+              <select
+                value={filterRole}
+                onChange={(e) => setFilterRole(e.target.value)}
+                className="block w-full sm:w-auto pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg bg-white"
+              >
+                <option value="all">Alle Rollen</option>
+                <option value="ADMIN">Admins</option>
+                <option value="FAMILY">Familien</option>
+                <option value="AUPAIR">Kandidaten</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <span className="text-xs text-gray-500 font-medium whitespace-nowrap">Pro Load</span>
+              <select
+                value={size}
+                onChange={(e) => setSize(Number(e.target.value))}
+                className="block w-full sm:w-auto pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg bg-white"
+              >
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+                <option value={200}>200</option>
+              </select>
+            </div>
+
+            <button
+              onClick={reloadFirstPage}
+              className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm w-full sm:w-auto justify-center"
+              title="Aktualisieren"
             >
-              <option value="all">Alle Rollen</option>
-              <option value="ADMIN">Admins</option>
-              <option value="FAMILY">Familien</option>
-              <option value="AUPAIR">Kandidaten</option>
-            </select>
+              <RefreshCw className="w-4 h-4" />
+              Refresh
+            </button>
+
+            <button
+              onClick={resetFilters}
+              className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors shadow-sm w-full sm:w-auto justify-center"
+              title="Filter zurücksetzen"
+            >
+              Filter reset
+            </button>
           </div>
         </div>
       </div>
 
-      {/* --- TABLE SECTION --- */}
+      {/* TABLE */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -436,7 +524,7 @@ export default function Users() {
             </thead>
 
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredUsers.length === 0 ? (
+              {users.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
                     <div className="flex flex-col items-center justify-center">
@@ -444,31 +532,21 @@ export default function Users() {
                         <Search className="w-6 h-6 text-gray-400" />
                       </div>
                       <p className="text-base font-medium text-gray-900">Keine Treffer</p>
-                      <p className="text-sm mt-1">
-                        Ändern Sie den Suchbegriff oder setzen Sie die Filter zurück.
-                      </p>
-                      <button
-                        onClick={() => {
-                          setSearchTerm('');
-                          setFilterRole('all');
-                          setActiveTab('ALL');
-                        }}
-                        className="mt-4 text-blue-600 hover:text-blue-700 text-sm font-medium"
-                      >
+                      <p className="text-sm mt-1">Filter/ Suche anpassen oder zurücksetzen.</p>
+                      <button onClick={resetFilters} className="mt-4 text-blue-600 hover:text-blue-700 text-sm font-medium">
                         Filter zurücksetzen
                       </button>
                     </div>
                   </td>
                 </tr>
               ) : (
-                filteredUsers.map((user) => {
+                users.map((user) => {
                   const isAdmin = isAdminUser(user);
                   const statusInfo = STATUS_CONFIG[user.status] || STATUS_CONFIG.NOACTIVE;
                   const isProcessing = processingId === user.id;
 
                   return (
                     <tr key={user.id} className="group hover:bg-gray-50/80 transition-colors">
-                      {/* Name & Avatar */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <div className="flex-shrink-0 h-10 w-10">
@@ -485,16 +563,13 @@ export default function Users() {
                           <div className="ml-4">
                             <div className="text-sm font-medium text-gray-900 flex items-center gap-1">
                               {user.name} {user.surname}
-                              {isAdmin && (
-                                <ShieldAlert className="w-3.5 h-3.5 text-indigo-500" title="Admin" />
-                              )}
+                              {isAdmin && <ShieldAlert className="w-3.5 h-3.5 text-indigo-500" title="Admin" />}
                             </div>
                             <div className="text-sm text-gray-500">{user.email}</div>
                           </div>
                         </div>
                       </td>
 
-                      {/* Role */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex flex-wrap gap-1">
                           {(user.roles || []).map((role, idx) => (
@@ -508,7 +583,6 @@ export default function Users() {
                         </div>
                       </td>
 
-                      {/* Status */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusInfo.color}`}
@@ -522,12 +596,10 @@ export default function Users() {
                         </span>
                       </td>
 
-                      {/* Date */}
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <span className="text-gray-400">-</span>
+                        {user.createdAt ? <span>{String(user.createdAt).replace('T', ' ').slice(0, 16)}</span> : <span className="text-gray-400">-</span>}
                       </td>
 
-                      {/* Actions */}
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity focus-within:opacity-100">
                           {user.status === 'PENDING' && (
@@ -537,11 +609,7 @@ export default function Users() {
                               className="text-green-600 hover:bg-green-50 p-1.5 rounded-lg border border-transparent hover:border-green-200 transition-all"
                               title="Genehmigen"
                             >
-                              {isProcessing ? (
-                                <RefreshCw className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <CheckCircle2 className="w-4 h-4" />
-                              )}
+                              {isProcessing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                             </button>
                           )}
 
@@ -552,19 +620,12 @@ export default function Users() {
                               className="text-blue-600 hover:bg-blue-50 p-1.5 rounded-lg border border-transparent hover:border-blue-200 transition-all"
                               title="E-Mail erneut senden"
                             >
-                              {isProcessing ? (
-                                <RefreshCw className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Send className="w-4 h-4" />
-                              )}
+                              {isProcessing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                             </button>
                           )}
 
                           {isAdmin ? (
-                            <div
-                              className="p-1.5 text-gray-300 cursor-not-allowed"
-                              title="Admin kann nicht bearbeitet werden"
-                            >
+                            <div className="p-1.5 text-gray-300 cursor-not-allowed" title="Admin kann nicht bearbeitet werden">
                               <Lock className="w-4 h-4" />
                             </div>
                           ) : (
@@ -595,47 +656,60 @@ export default function Users() {
           </table>
         </div>
 
-        <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex justify-between items-center">
+        {/* FOOTER: Load more */}
+        <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center">
           <span className="text-xs text-gray-500 uppercase tracking-wide font-semibold">
-            Gesamt: {filteredUsers.length} Ergebnis(se)
+            {totalElements} total • Geladen {users.length} • Seite {Math.min(page + 1, Math.max(totalPages, 1))}/{Math.max(totalPages, 1)}
           </span>
+
+          <div className="flex items-center gap-2">
+            {canLoadMore ? (
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="px-4 py-2 text-sm rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 inline-flex items-center gap-2"
+              >
+                {loadingMore ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Laden...
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="w-4 h-4" />
+                    Mehr laden
+                  </>
+                )}
+              </button>
+            ) : (
+              <span className="text-sm text-gray-500">Ende</span>
+            )}
+          </div>
         </div>
       </div>
 
+      {/* Modal (Create/Edit) */}
       {showModal && (
-        <Modal
-          show={showModal}
-          onClose={closeModal}
-          type="user"
-          item={editingUser}
-          onSave={handleSave}
-        />
+        <Modal show={showModal} onClose={closeModal} type="user" item={editingUser} onSave={handleSave} />
       )}
 
+      {/* Approve Modal */}
       {showApproveModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={closeApproveModal} />
           <div className="relative w-full max-w-md mx-4 bg-white rounded-xl shadow-lg border border-gray-200">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <h3 className="text-base font-semibold text-gray-900">Zugriffszeitraum (gültig bis)</h3>
-              <button
-                onClick={closeApproveModal}
-                className="p-2 rounded-lg hover:bg-gray-50 text-gray-500"
-                title="Schließen"
-              >
+              <button onClick={closeApproveModal} className="p-2 rounded-lg hover:bg-gray-50 text-gray-500" title="Schließen">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="px-5 py-4 space-y-3">
-              <p className="text-sm text-gray-600">
-                Wählen Sie die Zeit aus, zu der sich der Benutzer anmelden kann.
-              </p>
+              <p className="text-sm text-gray-600">Wählen Sie die Zeit aus, zu der sich der Benutzer anmelden kann.</p>
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">
-                  gültigbis (LokalesDatum/Uhrzeit)
-                </label>
+                <label className="block text-xs font-medium text-gray-600 mb-1">gültigbis (LokalesDatum/Uhrzeit)</label>
                 <input
                   type="datetime-local"
                   value={approveValidUntil}

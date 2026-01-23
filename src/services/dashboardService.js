@@ -7,7 +7,7 @@ const dashboardService = {
   // ======================
   // USERS
   // ======================
-  getUsers: () => axios.get(`${API_URL}/users`).then(res => res.data),
+  getUsers: (params = {}) => axios.get(`${API_URL}/users`, { params }),
   getUser: (id) => axios.get(`${API_URL}/users/${id}`).then(res => res.data),
   createUser: (data) => axios.post(`${API_URL}/users`, data).then(res => res.data),
   updateUser: (id, data) => axios.put(`${API_URL}/users/${id}`, data).then(res => res.data),
