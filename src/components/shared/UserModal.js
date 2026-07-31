@@ -3,6 +3,7 @@ import { X, Save, Calendar, Clock, AlertCircle } from 'lucide-react';
 
 const ROLE_OPTIONS = [
   { value: 'ROLE_AUPAIR', label: 'Kandidat' },
+  { value: 'ROLE_MANAGER', label: 'Managerin' },
   { value: 'ROLE_FAMILY', label: 'Familie' }
 ];
 

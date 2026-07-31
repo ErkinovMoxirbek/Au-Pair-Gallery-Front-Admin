@@ -8,25 +8,68 @@ import {
   Settings,
   LogOut 
 } from 'lucide-react';
+
 import authService from '../../services/authService';
-import { clearAuth } from '../../utils/tokenManager';
+import { clearAuth, getUser } from '../../utils/tokenManager';
+import { hasAllowedRole } from '../../utils/roleUtils';
 
 const navItems = [
-  { to: '/dashboard/overview', icon: LayoutDashboard, label: 'Übersicht' },
-  { to: '/dashboard/users', icon: Users, label: 'Benutzer' },
-  { to: '/dashboard/families', icon: Home, label: 'Familien' },
-  { to: '/dashboard/candidates', icon: Users, label: 'Kandidaten' },
-  { to: '/dashboard/applications', icon: MessageCircle, label: 'Bewerbungen' },
-  { to: '/dashboard/calendar', icon: Calendar, label: 'Kalender' },
-  { to: '/dashboard/settings', icon: Settings, label: 'Einstellungen' },
+  { 
+    to: '/dashboard/overview', 
+    icon: LayoutDashboard, 
+    label: 'Übersicht',
+    roles: ['ADMIN']
+  },
+  { 
+    to: '/dashboard/users', 
+    icon: Users, 
+    label: 'Benutzer',
+    roles: ['ADMIN', 'MANAGER']
+  },
+  { 
+    to: '/dashboard/families', 
+    icon: Home, 
+    label: 'Familien',
+    roles: ['ADMIN']
+  },
+  { 
+    to: '/dashboard/candidates', 
+    icon: Users, 
+    label: 'Kandidaten',
+    roles: ['ADMIN']
+  },
+  { 
+    to: '/dashboard/applications', 
+    icon: MessageCircle, 
+    label: 'Bewerbungen',
+    roles: ['ADMIN']
+  },
+  { 
+    to: '/dashboard/calendar', 
+    icon: Calendar, 
+    label: 'Kalender',
+    roles: ['ADMIN', 'MANAGER']
+  },
+  { 
+    to: '/dashboard/settings', 
+    icon: Settings, 
+    label: 'Einstellungen',
+    roles: ['ADMIN', 'MANAGER']
+  },
 ];
 
 export default function Sidebar() {
   const navigate = useNavigate();
+  const user = getUser();
+
+  const visibleNavItems = navItems.filter((item) =>
+    hasAllowedRole(user, item.roles)
+  );
 
   const handleLogout = async () => {
     try {
       const refreshToken = localStorage.getItem('refreshToken');
+
       if (refreshToken) {
         await authService.logout(refreshToken);
       }
@@ -43,8 +86,9 @@ export default function Sidebar() {
       <div className="p-6">
         <h2 className="text-2xl font-bold text-blue-600">Au Pair Gallery</h2>
       </div>
+
       <nav className="mt-6">
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -58,6 +102,7 @@ export default function Sidebar() {
             {item.label}
           </NavLink>
         ))}
+
         <button
           onClick={handleLogout}
           className="flex items-center w-full px-6 py-3 text-red-600 hover:bg-red-50 transition-colors mt-8"

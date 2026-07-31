@@ -20,10 +20,12 @@ import {
   Award,
   BookOpen,
   Heart,
+  Image as ImageIcon,
 } from "lucide-react";
+
 import dashboardService from "../../services/dashboardService";
 import LoadingSpinner from "../../components/shared/LoadingSpinner";
-import CandidateModal from "../../components/shared/CandidateModal"; // ⬅️ YANGI IMPORT
+import CandidateModal from "../../components/shared/CandidateModal";
 
 // --- Helpers ---
 
@@ -73,8 +75,7 @@ const StatusBadge = ({ status }) => {
 
 // Avatar
 const Avatar = ({ url, name, size = "md" }) => {
-  const sizeClass =
-    size === "lg" ? "w-20 h-20 text-2xl" : "w-12 h-12 text-lg";
+  const sizeClass = size === "lg" ? "w-20 h-20 text-2xl" : "w-12 h-12 text-lg";
   const initial = name?.charAt(0).toUpperCase() || "C";
 
   return (
@@ -90,18 +91,43 @@ const Avatar = ({ url, name, size = "md" }) => {
   );
 };
 
-// --- HAUPTKOMPONENTE ---
+// Photos normalize: backend turlicha qaytarsa ham ishlasin
+const normalizePhotos = (data) => {
+  if (!data) return [];
+  const arr = Array.isArray(data) ? data : data?.content || data?.data || [];
+  return (Array.isArray(arr) ? arr : [])
+    .map((p) => {
+      // string url
+      if (typeof p === "string") return { id: p, url: p };
+
+      // object
+      const url = p.url || p.fileUrl || p.path || p.filePath || p.photoUrl;
+      const id = p.id ?? p.photoId ?? p.key ?? url;
+      if (!url) return null;
+      return { id, url };
+    })
+    .filter(Boolean);
+};
+
+// --- MAIN COMPONENT ---
 export default function Applications() {
-  // Listen-States
+  // List states
   const [applications, setApplications] = useState([]);
   const [listLoading, setListLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("PENDING");
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Detail-States
+  // Detail states
   const [selectedId, setSelectedId] = useState(null);
   const [fullCandidate, setFullCandidate] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
+
+  // Photos states
+  const [photos, setPhotos] = useState([]);
+  const [photosLoading, setPhotosLoading] = useState(false);
+  const [photoError, setPhotoError] = useState("");
+  const [activePhotoIndex, setActivePhotoIndex] = useState(null);
+  const [deletingPhotoId, setDeletingPhotoId] = useState(null);
 
   // Reject modal
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
@@ -109,10 +135,10 @@ export default function Applications() {
   const [rejectSubmitting, setRejectSubmitting] = useState(false);
   const [rejectError, setRejectError] = useState("");
 
-  // EDIT modal
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false); // ⬅️ YANGI
+  // Edit modal
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // Liste laden – mit useCallback stabilisiert
+  // Fetch list
   const fetchList = useCallback(async () => {
     setListLoading(true);
     try {
@@ -127,14 +153,16 @@ export default function Applications() {
     }
   }, [activeTab]);
 
-  // 1. Beim Statuswechsel Liste neu laden
+  // 1) Status change -> reload list
   useEffect(() => {
     fetchList();
     setSelectedId(null);
     setFullCandidate(null);
+    setPhotos([]);
+    setActivePhotoIndex(null);
   }, [activeTab, fetchList]);
 
-  // 2. Beim ID-Wechsel vollständige Kandidaten-Daten laden
+  // 2) selectedId change -> load candidate detail
   useEffect(() => {
     if (!selectedId) return;
 
@@ -155,37 +183,56 @@ export default function Applications() {
     fetchDetail();
   }, [selectedId]);
 
-  // Kandidatni qabul qilish (ACTIVE)
+  // 3) selectedId change -> load photos
+  useEffect(() => {
+    if (!selectedId) {
+      setPhotos([]);
+      setPhotoError("");
+      setActivePhotoIndex(null);
+      return;
+    }
+
+    const fetchPhotos = async () => {
+      setPhotosLoading(true);
+      setPhotoError("");
+      try {
+        const data = await dashboardService.getCandidatePhotos(selectedId);
+        setPhotos(normalizePhotos(data));
+      } catch (e) {
+        console.error("Photos error:", e);
+        setPhotos([]);
+        setPhotoError("Fotos konnten nicht geladen werden.");
+      } finally {
+        setPhotosLoading(false);
+      }
+    };
+
+    fetchPhotos();
+  }, [selectedId]);
+
+  // Accept candidate
   const handleAccept = async () => {
     if (!fullCandidate) return;
 
-    if (
-      !window.confirm(
-        `Sind Sie sicher, dass Sie diesen Kandidaten annehmen möchten?`
-      )
-    ) {
+    if (!window.confirm(`Sind Sie sicher, dass Sie diesen Kandidaten annehmen möchten?`)) {
       return;
     }
 
     try {
-      await dashboardService.updateCandidateStatus(
-        fullCandidate.id,
-        "ACTIVE",
-        null
-      );
+      await dashboardService.updateCandidateStatus(fullCandidate.id, "ACTIVE", null);
 
-      setApplications((prev) =>
-        prev.filter((app) => app.id !== fullCandidate.id)
-      );
+      setApplications((prev) => prev.filter((app) => app.id !== fullCandidate.id));
       setSelectedId(null);
       setFullCandidate(null);
+      setPhotos([]);
+      setActivePhotoIndex(null);
     } catch (error) {
       console.error("Status update error", error);
       alert("Es ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.");
     }
   };
 
-  // Reject modal
+  // Reject modal controls
   const openRejectModal = () => {
     setRejectReason("");
     setRejectError("");
@@ -211,37 +258,31 @@ export default function Applications() {
     setRejectError("");
 
     try {
-      await dashboardService.updateCandidateStatus(
-        fullCandidate.id,
-        "REJECTED",
-        rejectReason.trim()
-      );
+      await dashboardService.updateCandidateStatus(fullCandidate.id, "REJECTED", rejectReason.trim());
 
-      setApplications((prev) =>
-        prev.filter((app) => app.id !== fullCandidate.id)
-      );
+      setApplications((prev) => prev.filter((app) => app.id !== fullCandidate.id));
       setSelectedId(null);
       setFullCandidate(null);
+      setPhotos([]);
+      setActivePhotoIndex(null);
 
       setIsRejectModalOpen(false);
       setRejectReason("");
     } catch (error) {
       console.error("Reject error", error);
-      setRejectError(
-        "Es ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut."
-      );
+      setRejectError("Es ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.");
     } finally {
       setRejectSubmitting(false);
     }
   };
 
-  // EDIT: modalni ochish
+  // Edit modal open
   const handleEdit = () => {
     if (!fullCandidate) return;
     setIsEditModalOpen(true);
   };
 
-  // EDIT: saqlash (CandidateModal -> backend)
+  // Save candidate from CandidateModal
   const handleSaveCandidate = async (
     formData,
     photoFile,
@@ -253,20 +294,14 @@ export default function Applications() {
     if (!fullCandidate) return;
 
     try {
-      // API chaqirish – formData + fayllar
-      const updated = await dashboardService.updateCandidate(
-        fullCandidate.id,
-        formData,
-        {
-          photoFile,
-          cvFile,
-          certificateFile,
-          diplomaFile,
-          passportFile,
-        }
-      );
+      const updated = await dashboardService.updateCandidate(fullCandidate.id, formData, {
+        photoFile,
+        cvFile,
+        certificateFile,
+        diplomaFile,
+        passportFile,
+      });
 
-      // detail va listni yangilash
       const candidateData = updated?.data || updated;
 
       setFullCandidate(candidateData || formData);
@@ -274,17 +309,55 @@ export default function Applications() {
         prev.map((c) => (c.id === fullCandidate.id ? { ...c, ...candidateData } : c))
       );
 
+      // refresh photos (agar modal orqali photo upload qilinsa)
+      try {
+        setPhotosLoading(true);
+        const data = await dashboardService.getCandidatePhotos(fullCandidate.id);
+        setPhotos(normalizePhotos(data));
+      } catch (e) {
+        console.error("Photos refresh error:", e);
+      } finally {
+        setPhotosLoading(false);
+      }
+
       setIsEditModalOpen(false);
     } catch (error) {
       console.error("Candidate update error:", error);
-      alert(
-        "Die Änderungen konnten nicht gespeichert werden. Bitte versuchen Sie es erneut."
-      );
-      throw error; // CandidateModal ichidagi spinner to‘g‘ri ishlashi uchun
+      alert("Die Änderungen konnten nicht gespeichert werden. Bitte versuchen Sie es erneut.");
+      throw error;
     }
   };
 
-  // Suchfilter
+  // Delete photo
+  const handleDeletePhoto = async (photo) => {
+    if (!fullCandidate) return;
+
+    const ok = window.confirm("Möchten Sie dieses Foto wirklich löschen?");
+    if (!ok) return;
+
+    try {
+      setDeletingPhotoId(photo.id);
+
+      // ✅ Standard endpoint: DELETE /candidates/{candidateId}/photos/{photoId}
+      await dashboardService.deleteCandidatePhoto(fullCandidate.id, photo.id);
+
+      setPhotos((prev) => prev.filter((p) => p.id !== photo.id));
+
+      setActivePhotoIndex((idx) => {
+        if (idx === null) return null;
+        const newList = photos.filter((p) => p.id !== photo.id);
+        if (newList.length === 0) return null;
+        return Math.min(idx, newList.length - 1);
+      });
+    } catch (e) {
+      console.error("Delete photo error:", e);
+      alert("Foto konnte nicht gelöscht werden. Bitte versuchen Sie es erneut.");
+    } finally {
+      setDeletingPhotoId(null);
+    }
+  };
+
+  // Filter list by name/surname
   const filteredList = applications.filter((app) => {
     const term = searchTerm.toLowerCase();
     return (
@@ -293,23 +366,19 @@ export default function Applications() {
     );
   });
 
-  // Interessen-Liste in einen String umwandeln
+  // Hobbies string
   const hobbiesString = useMemo(
-    () =>
-      fullCandidate?.hobbies?.map((h) => h.name ?? h).join(", ") ||
-      "Keine Angaben",
+    () => fullCandidate?.hobbies?.map((h) => h.name ?? h).join(", ") || "Keine Angaben",
     [fullCandidate]
   );
 
   return (
     <div className="h-[calc(100vh-64px)] bg-gray-50 flex flex-col md:flex-row overflow-hidden">
-      {/* 1. LINKE SEITE: LISTE */}
+      {/* LEFT: LIST */}
       <div className="w-full md:w-[400px] lg:w-[450px] bg-white border-r border-gray-200 flex flex-col h-full z-10 shadow-lg md:shadow-none flex-shrink-0">
-        {/* Header & Tabs & Suche */}
+        {/* Header */}
         <div className="p-4 border-b border-gray-100 bg-white sticky top-0 z-20">
-          <h2 className="text-xl font-bold text-gray-800 mb-4">
-            Bewerbungen
-          </h2>
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Bewerbungen</h2>
 
           <div className="flex p-1 bg-gray-100 rounded-lg mb-4">
             {["PENDING", "ACTIVE", "REJECTED"].map((tab) => (
@@ -322,11 +391,7 @@ export default function Applications() {
                     : "text-gray-500 hover:text-gray-700"
                 }`}
               >
-                {tab === "PENDING"
-                  ? "Neu"
-                  : tab === "ACTIVE"
-                  ? "Angenommen"
-                  : "Abgelehnt"}
+                {tab === "PENDING" ? "Neu" : tab === "ACTIVE" ? "Angenommen" : "Abgelehnt"}
               </button>
             ))}
           </div>
@@ -343,7 +408,7 @@ export default function Applications() {
           </div>
         </div>
 
-        {/* Listen-Elemente */}
+        {/* Items */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {listLoading ? (
             <div className="py-10 flex justify-center">
@@ -365,18 +430,12 @@ export default function Applications() {
                     : "border-l-4 border-l-transparent"
                 }`}
               >
-                <Avatar
-                  url={app.profileImagePath}
-                  name={app.name}
-                  size="md"
-                />
+                <Avatar url={app.profileImagePath} name={app.name} size="md" />
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-start">
                     <h3
                       className={`text-sm font-bold truncate ${
-                        selectedId === app.id
-                          ? "text-indigo-900"
-                          : "text-gray-900"
+                        selectedId === app.id ? "text-indigo-900" : "text-gray-900"
                       }`}
                     >
                       {app.name} {app.surname}
@@ -393,9 +452,7 @@ export default function Applications() {
                 </div>
                 <ChevronRight
                   className={`w-4 h-4 self-center text-gray-300 transition-transform ${
-                    selectedId === app.id
-                      ? "text-indigo-500 translate-x-1"
-                      : ""
+                    selectedId === app.id ? "text-indigo-500 translate-x-1" : ""
                   }`}
                 />
               </div>
@@ -404,19 +461,16 @@ export default function Applications() {
         </div>
       </div>
 
-      {/* 2. RECHTE SEITE: DETAILS */}
+      {/* RIGHT: DETAILS */}
       <div className="flex-1 bg-gray-50 flex flex-col h-full overflow-hidden relative">
         {!selectedId ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-400">
             <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
               <Briefcase className="w-8 h-8 opacity-40" />
             </div>
-            <h3 className="text-lg font-medium text-gray-600">
-              Kein Kandidat ausgewählt
-            </h3>
+            <h3 className="text-lg font-medium text-gray-600">Kein Kandidat ausgewählt</h3>
             <p className="text-sm max-w-xs text-center mt-2">
-              Wählen Sie einen Kandidaten aus der linken Liste aus, um Details
-              zu sehen.
+              Wählen Sie einen Kandidaten aus der linken Liste aus, um Details zu sehen.
             </p>
           </div>
         ) : detailLoading || !fullCandidate ? (
@@ -428,14 +482,10 @@ export default function Applications() {
           </div>
         ) : (
           <>
-            {/* Detail-Header */}
+            {/* Header */}
             <div className="bg-white px-6 py-4 border-b border-gray-200 flex items-center justify-between sticky top-0 z-10 shadow-sm">
               <div className="flex items-center gap-4">
-                <Avatar
-                  url={fullCandidate.profileImagePath}
-                  name={fullCandidate.name}
-                  size="lg"
-                />
+                <Avatar url={fullCandidate.profileImagePath} name={fullCandidate.name} size="lg" />
                 <div>
                   <h1 className="text-2xl font-bold text-gray-900 leading-tight">
                     {fullCandidate.name} {fullCandidate.surname}
@@ -458,6 +508,7 @@ export default function Applications() {
                   <Edit className="w-4 h-4" />
                   Bearbeiten
                 </button>
+
                 {activeTab === "PENDING" && (
                   <>
                     <button
@@ -479,9 +530,9 @@ export default function Applications() {
               </div>
             </div>
 
-            {/* Scrollbarer Inhalt */}
+            {/* Scroll content */}
             <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8">
-              {/* Kontakte & Hauptinfos */}
+              {/* Contacts */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600">
@@ -489,22 +540,20 @@ export default function Applications() {
                   </div>
                   <div className="overflow-hidden">
                     <p className="text-xs text-gray-500">Telefon</p>
-                    <p className="font-semibold text-gray-900 truncate">
-                      {fullCandidate.phone || "—"}
-                    </p>
+                    <p className="font-semibold text-gray-900 truncate">{fullCandidate.phone || "—"}</p>
                   </div>
                 </div>
+
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-600">
                     <Mail className="w-5 h-5" />
                   </div>
                   <div className="overflow-hidden">
                     <p className="text-xs text-gray-500">E-Mail</p>
-                    <p className="font-semibold text-gray-900 truncate">
-                      {fullCandidate.email || "—"}
-                    </p>
+                    <p className="font-semibold text-gray-900 truncate">{fullCandidate.email || "—"}</p>
                   </div>
                 </div>
+
                 <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center text-green-600">
                     <MapPin className="w-5 h-5" />
@@ -512,17 +561,16 @@ export default function Applications() {
                   <div className="overflow-hidden">
                     <p className="text-xs text-gray-500">Adresse</p>
                     <p className="font-semibold text-gray-900 truncate">
-                      {fullCandidate.city || "—"},{" "}
-                      {fullCandidate.country || "—"}
+                      {fullCandidate.city || "—"}, {fullCandidate.country || "—"}
                     </p>
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Hauptinfos */}
+                {/* Main */}
                 <div className="lg:col-span-2 space-y-8">
-                  {/* Über mich */}
+                  {/* About */}
                   <section>
                     <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
                       <User className="w-5 h-5 text-gray-400" /> Über mich
@@ -542,11 +590,67 @@ export default function Applications() {
                     </div>
                   </section>
 
-                  {/* Berufserfahrung */}
+                  {/* ✅ Photos Gallery */}
                   <section>
                     <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-                      <Briefcase className="w-5 h-5 text-gray-400" />{" "}
-                      Berufserfahrung (
+                      <ImageIcon className="w-5 h-5 text-gray-400" /> Fotos ({photos.length})
+                    </h3>
+
+                    <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
+                      {photosLoading ? (
+                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Fotos werden geladen...
+                        </div>
+                      ) : photoError ? (
+                        <p className="text-sm text-rose-600">{photoError}</p>
+                      ) : photos.length === 0 ? (
+                        <p className="text-sm text-gray-500 italic">Keine Fotos hochgeladen</p>
+                      ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                          {photos.map((p, idx) => (
+                            <div key={p.id} className="relative group">
+                              <button
+                                type="button"
+                                onClick={() => setActivePhotoIndex(idx)}
+                                className="w-full aspect-square rounded-xl overflow-hidden border border-gray-200 bg-gray-50 hover:border-indigo-300 transition"
+                                title="Vorschau"
+                              >
+                                <img
+                                  src={p.url}
+                                  alt={`Photo ${idx + 1}`}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeletePhoto(p)}
+                                disabled={deletingPhotoId === p.id}
+                                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition
+                                           inline-flex items-center justify-center rounded-lg
+                                           bg-white/90 border border-gray-200 shadow-sm
+                                           w-9 h-9 hover:bg-rose-50 hover:border-rose-200 disabled:opacity-60"
+                                title="Löschen"
+                              >
+                                {deletingPhotoId === p.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin text-gray-600" />
+                                ) : (
+                                  <XCircle className="w-5 h-5 text-rose-600" />
+                                )}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </section>
+
+                  {/* Experience */}
+                  <section>
+                    <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+                      <Briefcase className="w-5 h-5 text-gray-400" /> Berufserfahrung (
                       {fullCandidate.experiences?.length || 0})
                     </h3>
                     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -557,37 +661,25 @@ export default function Applications() {
                             className="p-5 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition"
                           >
                             <div className="flex justify-between items-start mb-1">
-                              <h4 className="font-bold text-gray-900">
-                                {exp.positionTitle}
-                              </h4>
+                              <h4 className="font-bold text-gray-900">{exp.positionTitle}</h4>
                               <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-1 rounded-lg flex-shrink-0 ml-4">
-                                {formatDate(exp.startDate)} -{" "}
-                                {exp.endDate
-                                  ? formatDate(exp.endDate)
-                                  : "Aktuell"}
+                                {formatDate(exp.startDate)} - {exp.endDate ? formatDate(exp.endDate) : "Aktuell"}
                               </span>
                             </div>
-                            <p className="text-sm text-indigo-600 font-medium mb-2">
-                              {exp.companyName}
-                            </p>
-                            <p className="text-sm text-gray-600 whitespace-pre-wrap">
-                              {exp.responsibilities}
-                            </p>
+                            <p className="text-sm text-indigo-600 font-medium mb-2">{exp.companyName}</p>
+                            <p className="text-sm text-gray-600 whitespace-pre-wrap">{exp.responsibilities}</p>
                           </div>
                         ))
                       ) : (
-                        <div className="p-5 text-gray-500 italic">
-                          Keine Berufserfahrung angegeben
-                        </div>
+                        <div className="p-5 text-gray-500 italic">Keine Berufserfahrung angegeben</div>
                       )}
                     </div>
                   </section>
 
-                  {/* Ausbildung */}
+                  {/* Education */}
                   <section>
                     <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-                      <GraduationCap className="w-5 h-5 text-gray-400" />{" "}
-                      Ausbildung (
+                      <GraduationCap className="w-5 h-5 text-gray-400" /> Ausbildung (
                       {fullCandidate.educations?.length || 0})
                     </h3>
                     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -597,29 +689,18 @@ export default function Applications() {
                             key={idx}
                             className="p-5 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition"
                           >
-                            <div className="flex justify_between items-start mb-1">
-                              <h4 className="font-bold text-gray-900">
-                                {edu.degree}
-                              </h4>
+                            <div className="flex justify-between items-start mb-1">
+                              <h4 className="font-bold text-gray-900">{edu.degree}</h4>
                               <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-1 rounded-lg flex-shrink-0 ml-4">
-                                {formatDate(edu.startDate)} -{" "}
-                                {edu.endDate
-                                  ? formatDate(edu.endDate)
-                                  : "Aktuell"}
+                                {formatDate(edu.startDate)} - {edu.endDate ? formatDate(edu.endDate) : "Aktuell"}
                               </span>
                             </div>
-                            <p className="text-sm text-indigo-600 font-medium mb-2">
-                              {edu.institutionName}
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              {edu.description}
-                            </p>
+                            <p className="text-sm text-indigo-600 font-medium mb-2">{edu.institutionName}</p>
+                            <p className="text-sm text-gray-600">{edu.description}</p>
                           </div>
                         ))
                       ) : (
-                        <div className="p-5 text-gray-500 italic">
-                          Keine Bildungsangaben gemacht
-                        </div>
+                        <div className="p-5 text-gray-500 italic">Keine Bildungsangaben gemacht</div>
                       )}
                     </div>
                   </section>
@@ -627,64 +708,48 @@ export default function Applications() {
 
                 {/* Sidebar */}
                 <div className="space-y-6">
-                  {/* Zusätzliche Informationen */}
+                  {/* Additional */}
                   <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
-                    <h3 className="font-bold text-gray-900 mb-4">
-                      Zusätzliche Informationen
-                    </h3>
+                    <h3 className="font-bold text-gray-900 mb-4">Zusätzliche Informationen</h3>
                     <dl className="space-y-3 text-sm">
                       <div className="flex justify-between border-b border-gray-50 pb-2">
                         <dt className="text-gray-500 flex items-center gap-1">
                           <Calendar className="w-4 h-4" /> Geburtsdatum
                         </dt>
-                        <dd className="font-medium">
-                          {formatDate(fullCandidate.birthday)}
-                        </dd>
+                        <dd className="font-medium">{formatDate(fullCandidate.birthday)}</dd>
                       </div>
                       <div className="flex justify-between border-b border-gray-50 pb-2">
                         <dt className="text-gray-500 flex items-center gap-1">
                           <Heart className="w-4 h-4" /> Interessen
                         </dt>
-                        <dd className="font-medium text-right max-w-[50%]">
-                          {hobbiesString}
-                        </dd>
+                        <dd className="font-medium text-right max-w-[50%]">{hobbiesString}</dd>
                       </div>
                       <div className="flex justify-between border-b border-gray-50 pb-2">
                         <dt className="text-gray-500">Geschlecht</dt>
-                        <dd className="font-medium">
-                          {fullCandidate.gender || "—"}
-                        </dd>
+                        <dd className="font-medium">{fullCandidate.gender || "—"}</dd>
                       </div>
                       <div className="flex justify-between border-b border-gray-50 pb-2">
                         <dt className="text-gray-500">Nationalität</dt>
-                        <dd className="font-medium">
-                          {fullCandidate.nationality || "—"}
-                        </dd>
+                        <dd className="font-medium">{fullCandidate.nationality || "—"}</dd>
                       </div>
                       <div className="flex justify-between border-b border-gray-50 pb-2">
                         <dt className="text-gray-500">Raucher</dt>
-                        <dd className="font-medium">
-                          {fullCandidate.smoker ? "Ja" : "Nein"}
-                        </dd>
+                        <dd className="font-medium">{fullCandidate.smoker ? "Ja" : "Nein"}</dd>
                       </div>
                       <div className="flex justify-between border-b border-gray-50 pb-2">
                         <dt className="text-gray-500">Haustierfreundlich</dt>
-                        <dd className="font-medium">
-                          {fullCandidate.petFriendly ? "Ja" : "Nein"}
-                        </dd>
+                        <dd className="font-medium">{fullCandidate.petFriendly ? "Ja" : "Nein"}</dd>
                       </div>
                       <div className="flex justify-between pt-1">
                         <dt className="text-gray-500">Führerschein</dt>
                         <dd className="font-medium">
-                          {fullCandidate.drivingLicense
-                            ? "Vorhanden"
-                            : "Nicht vorhanden"}
+                          {fullCandidate.drivingLicense ? "Vorhanden" : "Nicht vorhanden"}
                         </dd>
                       </div>
                     </dl>
                   </div>
 
-                  {/* Sprachkenntnisse */}
+                  {/* Languages */}
                   <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
                     <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                       <Globe className="w-5 h-5 text-gray-400" /> Sprachkenntnisse (
@@ -697,23 +762,19 @@ export default function Applications() {
                             key={idx}
                             className="flex justify-between py-1 border-b border-gray-50 last:border-0"
                           >
-                            <span className="text-sm font-medium text-gray-700">
-                              {lang.language}
-                            </span>
+                            <span className="text-sm font-medium text-gray-700">{lang.language}</span>
                             <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
                               {lang.level}
                             </span>
                           </div>
                         ))
                       ) : (
-                        <p className="text-xs text-gray-400 italic">
-                          Keine Sprachangaben gemacht
-                        </p>
+                        <p className="text-xs text-gray-400 italic">Keine Sprachangaben gemacht</p>
                       )}
                     </div>
                   </div>
 
-                  {/* Dokumente */}
+                  {/* Documents */}
                   <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
                     <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
                       <Download className="w-5 h-5 text-gray-400" /> Dokumente
@@ -722,11 +783,7 @@ export default function Applications() {
                       {[
                         { label: "Lebenslauf", file: fullCandidate.cvFilePath },
                         { label: "Diplom", file: fullCandidate.diplomaFilePath },
-                        {
-                          label: "Zertifikat",
-                          file: fullCandidate.certificateFilePath,
-                          icon: Award,
-                        },
+                        { label: "Zertifikat", file: fullCandidate.certificateFilePath, icon: Award },
                         { label: "Reisepass", file: fullCandidate.passportFilePath },
                       ]
                         .filter((doc) => !!doc.file)
@@ -744,18 +801,18 @@ export default function Applications() {
                             <Download className="w-4 h-4 text-gray-400 group-hover:text-indigo-500" />
                           </a>
                         ))}
+
                       {!fullCandidate.cvFilePath &&
                         !fullCandidate.diplomaFilePath &&
                         !fullCandidate.certificateFilePath &&
                         !fullCandidate.passportFilePath && (
-                          <p className="text-xs text-gray-400">
-                            Keine Dokumente hochgeladen
-                          </p>
+                          <p className="text-xs text-gray-400">Keine Dokumente hochgeladen</p>
                         )}
                     </div>
                   </div>
                 </div>
               </div>
+
               <div className="h-10" />
             </div>
           </>
@@ -766,17 +823,13 @@ export default function Applications() {
       {isRejectModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full mx-4 p-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-2">
-              Bewerbung ablehnen
-            </h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Bewerbung ablehnen</h2>
             <p className="text-sm text-gray-600 mb-4">
-              Bitte geben Sie kurz an, warum diese Bewerbung abgelehnt wird.
-              Dieser Text wird dem Kandidaten per E-Mail mitgeteilt.
+              Bitte geben Sie kurz an, warum diese Bewerbung abgelehnt wird. Dieser Text wird dem Kandidaten per
+              E-Mail mitgeteilt.
             </p>
 
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Ablehnungsgrund
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Ablehnungsgrund</label>
             <textarea
               rows={5}
               className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none resize-none"
@@ -787,9 +840,7 @@ export default function Applications() {
                 setRejectError("");
               }}
             />
-            {rejectError && (
-              <p className="mt-2 text-xs text-rose-600">{rejectError}</p>
-            )}
+            {rejectError && <p className="mt-2 text-xs text-rose-600">{rejectError}</p>}
 
             <div className="mt-5 flex justify-end gap-3">
               <button
@@ -804,9 +855,7 @@ export default function Applications() {
                 disabled={rejectSubmitting}
                 className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-rose-600 text-white text-sm font-semibold hover:bg-rose-700 shadow-sm disabled:opacity-60"
               >
-                {rejectSubmitting && (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                )}
+                {rejectSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 Ablehnung bestätigen
               </button>
             </div>
@@ -814,7 +863,7 @@ export default function Applications() {
         </div>
       )}
 
-      {/* EDIT MODAL – CandidateModal bilan integratsiya */}
+      {/* EDIT MODAL */}
       {fullCandidate && (
         <CandidateModal
           show={isEditModalOpen}
@@ -822,6 +871,46 @@ export default function Applications() {
           item={fullCandidate}
           onSave={handleSaveCandidate}
         />
+      )}
+
+      {/* PHOTO LIGHTBOX */}
+      {activePhotoIndex !== null && photos[activePhotoIndex] && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          onClick={() => setActivePhotoIndex(null)}
+        >
+          <div className="relative max-w-4xl w-full" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={photos[activePhotoIndex].url}
+              alt="Preview"
+              className="w-full max-h-[80vh] object-contain rounded-2xl bg-black"
+            />
+
+            <button
+              className="absolute top-3 right-3 bg-white/90 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold hover:bg-gray-100"
+              onClick={() => setActivePhotoIndex(null)}
+            >
+              Schließen
+            </button>
+
+            <div className="absolute left-3 right-3 top-1/2 -translate-y-1/2 flex justify-between">
+              <button
+                className="bg-white/90 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold hover:bg-gray-100 disabled:opacity-50"
+                disabled={activePhotoIndex <= 0}
+                onClick={() => setActivePhotoIndex((i) => Math.max(0, i - 1))}
+              >
+                Zurück
+              </button>
+              <button
+                className="bg-white/90 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold hover:bg-gray-100 disabled:opacity-50"
+                disabled={activePhotoIndex >= photos.length - 1}
+                onClick={() => setActivePhotoIndex((i) => Math.min(photos.length - 1, i + 1))}
+              >
+                Weiter
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

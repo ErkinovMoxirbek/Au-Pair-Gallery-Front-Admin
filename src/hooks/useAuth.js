@@ -17,11 +17,9 @@
       }
 
       try {
-        const res = await fetch(`${API_BASE_URL}/user/me`, {
+        const res = await fetch(`${API_BASE_URL}/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-
-        console.log(res);
         if (res.ok) {
           const userData = await res.json();
           setUser(userData.data);
